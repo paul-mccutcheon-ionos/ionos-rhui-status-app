@@ -10,10 +10,8 @@ let runtimeOverrides = {};
 const FIELDS = [
   'PORT',
   'SESSION_SECRET',
-  'RHEL8_LABEL', 'RHEL8_HOST', 'RHEL8_SSH_PORT', 'RHEL8_SSH_USER',
-  'RHEL8_SSH_KEY_PATH', 'RHEL8_SSH_KEY_CONTENT', 'RHEL8_SSH_PASSPHRASE',
-  'RHEL9_LABEL', 'RHEL9_HOST', 'RHEL9_SSH_PORT', 'RHEL9_SSH_USER',
-  'RHEL9_SSH_KEY_PATH', 'RHEL9_SSH_KEY_CONTENT', 'RHEL9_SSH_PASSPHRASE',
+  'HOST_LABEL', 'HOST_HOST', 'HOST_SSH_PORT', 'HOST_SSH_USER',
+  'HOST_SSH_KEY_PATH', 'HOST_SSH_KEY_CONTENT', 'HOST_SSH_PASSPHRASE',
   'RHUI_REPO_FILTER', 'RHUI_MONITORED_REPOS', 'SSH_TIMEOUT_MS', 'CDN_TIMEOUT_MS',
   'STATUS_POLL_INTERVAL_SECONDS',
 ];
@@ -37,15 +35,17 @@ function clearOverrides() {
   runtimeOverrides = {};
 }
 
-function parseHostConfig(prefix) {
+// The RHEL release (8/9/etc.) isn't asked for -- it's detected live from the
+// client itself (/etc/redhat-release) once connected.
+function parseHostConfig() {
   return {
-    label: get(`${prefix}_LABEL`) || prefix,
-    host: get(`${prefix}_HOST`) || '',
-    port: parseInt(get(`${prefix}_SSH_PORT`) || '22', 10),
-    username: get(`${prefix}_SSH_USER`) || '',
-    keyPath: get(`${prefix}_SSH_KEY_PATH`) || '',
-    keyContent: get(`${prefix}_SSH_KEY_CONTENT`) || '',
-    passphrase: get(`${prefix}_SSH_PASSPHRASE`) || '',
+    label: get('HOST_LABEL') || 'Test client',
+    host: get('HOST_HOST') || '',
+    port: parseInt(get('HOST_SSH_PORT') || '22', 10),
+    username: get('HOST_SSH_USER') || '',
+    keyPath: get('HOST_SSH_KEY_PATH') || '',
+    keyContent: get('HOST_SSH_KEY_CONTENT') || '',
+    passphrase: get('HOST_SSH_PASSPHRASE') || '',
   };
 }
 
@@ -70,10 +70,7 @@ function getConfig() {
   return {
     port: parseInt(get('PORT') || '3000', 10),
     sessionSecret: get('SESSION_SECRET') || 'dev-secret-change-me',
-    hosts: {
-      rhel8: parseHostConfig('RHEL8'),
-      rhel9: parseHostConfig('RHEL9'),
-    },
+    host: parseHostConfig(),
     // Substring match (case-insensitive) against repo id/baseurl used to pick
     // out the RHUI repos from everything in /etc/yum.repos.d on the client.
     repoFilter: get('RHUI_REPO_FILTER') || 'rhui',
@@ -85,9 +82,8 @@ function getConfig() {
 }
 
 function isConfigured() {
-  const cfg = getConfig();
-  const hostConfigured = (h) => Boolean(h.host && h.username && (h.keyPath || h.keyContent));
-  return hostConfigured(cfg.hosts.rhel8) || hostConfigured(cfg.hosts.rhel9);
+  const h = getConfig().host;
+  return Boolean(h.host && h.username && (h.keyPath || h.keyContent));
 }
 
 function saveOverridesToEnvFile() {
@@ -98,16 +94,13 @@ function saveOverridesToEnvFile() {
   push('PORT', cfg.port);
   push('SESSION_SECRET', cfg.sessionSecret);
 
-  for (const prefix of ['RHEL8', 'RHEL9']) {
-    const h = cfg.hosts[prefix.toLowerCase()];
-    push(`${prefix}_LABEL`, h.label);
-    push(`${prefix}_HOST`, h.host);
-    push(`${prefix}_SSH_PORT`, h.port);
-    push(`${prefix}_SSH_USER`, h.username);
-    push(`${prefix}_SSH_KEY_PATH`, h.keyPath);
-    push(`${prefix}_SSH_KEY_CONTENT`, h.keyContent);
-    push(`${prefix}_SSH_PASSPHRASE`, h.passphrase);
-  }
+  push('HOST_LABEL', cfg.host.label);
+  push('HOST_HOST', cfg.host.host);
+  push('HOST_SSH_PORT', cfg.host.port);
+  push('HOST_SSH_USER', cfg.host.username);
+  push('HOST_SSH_KEY_PATH', cfg.host.keyPath);
+  push('HOST_SSH_KEY_CONTENT', cfg.host.keyContent);
+  push('HOST_SSH_PASSPHRASE', cfg.host.passphrase);
 
   push('RHUI_REPO_FILTER', cfg.repoFilter);
   push('RHUI_MONITORED_REPOS', cfg.monitoredRepos.map((r) => `${r.repoId}|${r.publicRepomdUrl}`).join(';'));

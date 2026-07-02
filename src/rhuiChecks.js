@@ -383,8 +383,8 @@ function buildIssues(repos) {
   return issues;
 }
 
-async function checkHost(hostKey, hostCfg, cfg) {
-  const base = { hostKey, label: hostCfg.label, host: hostCfg.host };
+async function checkHost(hostCfg, cfg) {
+  const base = { label: hostCfg.label, host: hostCfg.host };
 
   if (!hostCfg.host || !hostCfg.username || (!hostCfg.keyPath && !hostCfg.keyContent)) {
     return { ...base, configured: false };
@@ -503,11 +503,8 @@ async function checkHost(hostKey, hostCfg, cfg) {
 }
 
 async function checkAll(cfg) {
-  const [rhel8, rhel9] = await Promise.all([
-    checkHost('rhel8', cfg.hosts.rhel8, cfg),
-    checkHost('rhel9', cfg.hosts.rhel9, cfg),
-  ]);
-  return { generatedAt: new Date(), hosts: { rhel8, rhel9 } };
+  const host = await checkHost(cfg.host, cfg);
+  return { generatedAt: new Date(), host };
 }
 
 // Remediation: enable RHUI repos that are currently disabled in the client's

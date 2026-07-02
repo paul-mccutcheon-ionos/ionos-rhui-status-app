@@ -35,44 +35,30 @@
       <p>
         <strong>What this app checks.</strong> IONOS runs the RHUI (Red Hat Update Infrastructure) servers that
         supply RHEL updates to your VMs, but this dashboard does not have direct access to that infrastructure.
-        Instead, it uses SSH to log into a <strong>test client</strong> you provide below — a RHEL 8 and/or RHEL 9
-        VM that is already registered to pull updates from IONOS RHUI — and runs the exact same checks a real
-        update would run: reading its repo configuration, resolving and reaching the RHUI server, validating
-        certificates, and attempting a live metadata fetch. This shows you precisely what a customer's server
-        experiences when it tries to update, and where in that chain a failure is happening.
+        Instead, it uses SSH to log into a <strong>test client</strong> you provide below — a RHEL VM that is
+        already registered to pull updates from IONOS RHUI — and runs the exact same checks a real update would
+        run: reading its repo configuration, resolving and reaching the RHUI server, validating certificates, and
+        attempting a live metadata fetch. The RHEL release is detected automatically once connected — you don't
+        need to specify it. This shows you precisely what a customer's server experiences when it tries to update,
+        and where in that chain a failure is happening.
       </p>
     </div>
     <p class="muted">
-      Enter details for RHEL 8, RHEL 9, or both — whichever test clients you have available. Values are kept in
-      server memory for this session unless you click "Save to .env".
+      Values are kept in server memory for this session unless you click "Save to .env".
     </p>
     <form id="setup-form">
-      <div class="host-columns">
-        <fieldset>
-          <legend>RHEL 8 test client</legend>
-          <label>Label <input name="rhel8.label" placeholder="RHUI RHEL 8" /></label>
-          <label>Host / IP <input name="rhel8.host" placeholder="10.0.0.10" /></label>
-          <label>SSH Port <input name="rhel8.port" type="number" value="22" /></label>
-          <label>SSH User <input name="rhel8.username" placeholder="cloud-user" /></label>
-          <label>SSH Key Path (on server) <input name="rhel8.keyPath" placeholder="/home/app/.ssh/rhel8_key" /></label>
-          <label>-- OR paste SSH Key content --
-            <textarea name="rhel8.keyContent" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
-          </label>
-          <label>Key Passphrase (if any) <input name="rhel8.passphrase" type="password" /></label>
-        </fieldset>
-        <fieldset>
-          <legend>RHEL 9 test client</legend>
-          <label>Label <input name="rhel9.label" placeholder="RHUI RHEL 9" /></label>
-          <label>Host / IP <input name="rhel9.host" placeholder="10.0.0.11" /></label>
-          <label>SSH Port <input name="rhel9.port" type="number" value="22" /></label>
-          <label>SSH User <input name="rhel9.username" placeholder="cloud-user" /></label>
-          <label>SSH Key Path (on server) <input name="rhel9.keyPath" placeholder="/home/app/.ssh/rhel9_key" /></label>
-          <label>-- OR paste SSH Key content --
-            <textarea name="rhel9.keyContent" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
-          </label>
-          <label>Key Passphrase (if any) <input name="rhel9.passphrase" type="password" /></label>
-        </fieldset>
-      </div>
+      <fieldset>
+        <legend>Test client</legend>
+        <label>Label <input name="host.label" placeholder="Test client" /></label>
+        <label>Host / IP <input name="host.host" placeholder="10.0.0.10" /></label>
+        <label>SSH Port <input name="host.port" type="number" value="22" /></label>
+        <label>SSH User <input name="host.username" placeholder="cloud-user" /></label>
+        <label>SSH Key Path (on server) <input name="host.keyPath" placeholder="/home/app/.ssh/client_key" /></label>
+        <label>-- OR paste SSH Key content --
+          <textarea name="host.keyContent" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
+        </label>
+        <label>Key Passphrase (if any) <input name="host.passphrase" type="password" /></label>
+      </fieldset>
 
       <fieldset>
         <legend>RHUI detection</legend>

@@ -34,17 +34,17 @@ router.get('/config/status', (req, res) => {
 
 router.get('/config', (req, res) => {
   const cfg = config.getConfig();
-  const redact = (h) => ({
-    label: h.label,
-    host: h.host,
-    port: h.port,
-    username: h.username,
-    keyPath: h.keyPath,
-    hasKeyContent: Boolean(h.keyContent),
-    hasPassphrase: Boolean(h.passphrase),
-  });
+  const h = cfg.host;
   res.json({
-    hosts: { rhel8: redact(cfg.hosts.rhel8), rhel9: redact(cfg.hosts.rhel9) },
+    host: {
+      label: h.label,
+      host: h.host,
+      port: h.port,
+      username: h.username,
+      keyPath: h.keyPath,
+      hasKeyContent: Boolean(h.keyContent),
+      hasPassphrase: Boolean(h.passphrase),
+    },
     repoFilter: cfg.repoFilter,
     monitoredRepos: cfg.monitoredRepos,
     pollIntervalSeconds: cfg.pollIntervalSeconds,
@@ -54,18 +54,15 @@ router.get('/config', (req, res) => {
 router.post('/config', (req, res) => {
   const body = req.body || {};
   const overrides = {};
+  const h = body.host || {};
 
-  for (const prefix of ['RHEL8', 'RHEL9']) {
-    const key = prefix.toLowerCase();
-    const h = body[key] || {};
-    if (h.label !== undefined) overrides[`${prefix}_LABEL`] = h.label;
-    if (h.host !== undefined) overrides[`${prefix}_HOST`] = h.host;
-    if (h.port !== undefined) overrides[`${prefix}_SSH_PORT`] = String(h.port);
-    if (h.username !== undefined) overrides[`${prefix}_SSH_USER`] = h.username;
-    if (h.keyPath !== undefined) overrides[`${prefix}_SSH_KEY_PATH`] = h.keyPath;
-    if (h.keyContent !== undefined) overrides[`${prefix}_SSH_KEY_CONTENT`] = h.keyContent;
-    if (h.passphrase !== undefined) overrides[`${prefix}_SSH_PASSPHRASE`] = h.passphrase;
-  }
+  if (h.label !== undefined) overrides.HOST_LABEL = h.label;
+  if (h.host !== undefined) overrides.HOST_HOST = h.host;
+  if (h.port !== undefined) overrides.HOST_SSH_PORT = String(h.port);
+  if (h.username !== undefined) overrides.HOST_SSH_USER = h.username;
+  if (h.keyPath !== undefined) overrides.HOST_SSH_KEY_PATH = h.keyPath;
+  if (h.keyContent !== undefined) overrides.HOST_SSH_KEY_CONTENT = h.keyContent;
+  if (h.passphrase !== undefined) overrides.HOST_SSH_PASSPHRASE = h.passphrase;
 
   if (body.repoFilter !== undefined) overrides.RHUI_REPO_FILTER = body.repoFilter;
   if (body.monitoredRepos !== undefined) overrides.RHUI_MONITORED_REPOS = body.monitoredRepos;
@@ -84,14 +81,9 @@ router.post('/config/save', (req, res) => {
   }
 });
 
-router.post('/fix/:hostKey/enable-repos', async (req, res) => {
-  const { hostKey } = req.params;
+router.post('/fix/enable-repos', async (req, res) => {
   const cfg = config.getConfig();
-  const hostCfg = cfg.hosts[hostKey];
-  if (!hostCfg) {
-    res.status(404).json({ ok: false, error: `Unknown host: ${hostKey}` });
-    return;
-  }
+  const hostCfg = cfg.host;
   const repoIds = Array.isArray(req.body?.repoIds) ? req.body.repoIds : [];
   if (!repoIds.length) {
     res.status(400).json({ ok: false, error: 'repoIds is required' });

@@ -38,13 +38,10 @@ function parseEnvText(text) {
 }
 
 function envMapToPayload(map) {
-  const payload = { rhel8: {}, rhel9: {} };
-  for (const prefix of ['RHEL8', 'RHEL9']) {
-    const key = prefix.toLowerCase();
-    for (const [suffix, field] of Object.entries(ENV_FIELD_MAP)) {
-      const envKey = `${prefix}_${suffix}`;
-      if (map[envKey] !== undefined) payload[key][field] = map[envKey];
-    }
+  const payload = { host: {} };
+  for (const [suffix, field] of Object.entries(ENV_FIELD_MAP)) {
+    const envKey = `HOST_${suffix}`;
+    if (map[envKey] !== undefined) payload.host[field] = map[envKey];
   }
   if (map.RHUI_REPO_FILTER !== undefined) payload.repoFilter = map.RHUI_REPO_FILTER;
   if (map.RHUI_MONITORED_REPOS !== undefined) payload.monitoredRepos = map.RHUI_MONITORED_REPOS;
@@ -174,7 +171,7 @@ function renderSubscriptionManager(sm) {
   return `<p>${badge(sm.overallStatus || 'Registered', 'warn')} — this host appears to be registered directly with Red Hat as well as using IONOS RHUI. Check for accidental double-billing.</p>`;
 }
 
-function renderIssues(issues, hostKey) {
+function renderIssues(issues) {
   if (!issues || !issues.length) return '<p class="muted">No configuration issues detected.</p>';
   return issues
     .map(
@@ -183,7 +180,7 @@ function renderIssues(issues, hostKey) {
         ${
           issue.fixId
             ? `<p class="muted">Fix command: <code>${issue.fixCommand}</code></p>
-               <button class="btn fix-btn" data-host-key="${hostKey}" data-fix-id="${issue.fixId}" data-repo-ids='${JSON.stringify(issue.repoIds)}'>${issue.fixLabel}</button>`
+               <button class="btn fix-btn" data-fix-id="${issue.fixId}" data-repo-ids='${JSON.stringify(issue.repoIds)}'>${issue.fixLabel}</button>`
             : ''
         }
       </div>`
@@ -257,7 +254,7 @@ function renderHostCard(host) {
     ${serverBlocks}
 
     <div class="section-title">Configuration issues found on this client</div>
-    ${renderIssues(host.clientSide.issues, host.hostKey)}
+    ${renderIssues(host.clientSide.issues)}
 
     <div class="section-title">Client entitlement certificate</div>
     <p class="check-explainer">The certificate this client uses to authenticate to RHUI. This is the one that most often expires and silently breaks updates.</p>
@@ -288,7 +285,7 @@ async function loadStatus(force) {
       return;
     }
     const data = await resp.json();
-    els.hostCards.innerHTML = renderHostCard(data.hosts.rhel8) + renderHostCard(data.hosts.rhel9);
+    els.hostCards.innerHTML = renderHostCard(data.host);
     els.lastUpdated.textContent = `Updated ${fmtDate(data.generatedAt)}`;
     show(els.dashboard);
   } catch (err) {
@@ -303,10 +300,9 @@ function hostIsFilled(h) {
 
 function formToConfigPayload(form) {
   const data = new FormData(form);
-  const payload = { rhel8: {}, rhel9: {} };
+  const payload = { host: {} };
   for (const [key, value] of data.entries()) {
-    if (key.startsWith('rhel8.')) payload.rhel8[key.slice(6)] = value;
-    else if (key.startsWith('rhel9.')) payload.rhel9[key.slice(6)] = value;
+    if (key.startsWith('host.')) payload.host[key.slice(5)] = value;
     else payload[key] = value;
   }
   return payload;
@@ -341,14 +337,12 @@ els.refreshBtn.addEventListener('click', () => loadStatus(true));
 els.hostCards.addEventListener('click', async (e) => {
   const btn = e.target.closest('.fix-btn');
   if (!btn) return;
-  const hostKey = btn.dataset.hostKey;
   const fixId = btn.dataset.fixId;
   const repoIds = JSON.parse(btn.dataset.repoIds || '[]');
   btn.disabled = true;
-  const originalText = btn.textContent;
   btn.textContent = 'Applying fix…';
   try {
-    const resp = await fetch(`/api/fix/${hostKey}/${fixId}`, {
+    const resp = await fetch(`/api/fix/${fixId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ repoIds }),
@@ -370,8 +364,8 @@ els.setupBtn.addEventListener('click', () => {
 els.setupForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const payload = formToConfigPayload(els.setupForm);
-  if (!hostIsFilled(payload.rhel8) && !hostIsFilled(payload.rhel9)) {
-    els.setupStatus.textContent = 'Error: fill in host, SSH user, and a key (path or content) for at least one host (RHEL 8 or RHEL 9).';
+  if (!hostIsFilled(payload.host)) {
+    els.setupStatus.textContent = 'Error: fill in host, SSH user, and a key (path or content) for the test client.';
     return;
   }
   els.setupStatus.textContent = 'Applying…';
@@ -393,8 +387,8 @@ els.setupForm.addEventListener('submit', async (e) => {
 
 els.saveEnvBtn.addEventListener('click', async () => {
   const payload = formToConfigPayload(els.setupForm);
-  if (!hostIsFilled(payload.rhel8) && !hostIsFilled(payload.rhel9)) {
-    els.setupStatus.textContent = 'Error: fill in host, SSH user, and a key (path or content) for at least one host (RHEL 8 or RHEL 9).';
+  if (!hostIsFilled(payload.host)) {
+    els.setupStatus.textContent = 'Error: fill in host, SSH user, and a key (path or content) for the test client.';
     return;
   }
   els.setupStatus.textContent = 'Saving to .env…';
