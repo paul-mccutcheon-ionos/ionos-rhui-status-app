@@ -10,6 +10,7 @@ const els = {
   setupStatus: document.getElementById('setup-status'),
   saveEnvBtn: document.getElementById('save-env-btn'),
   envUpload: document.getElementById('env-upload'),
+  versionPill: document.getElementById('version-pill'),
 };
 
 const ENV_FIELD_MAP = {
@@ -45,10 +46,7 @@ function envMapToPayload(map) {
       if (map[envKey] !== undefined) payload[key][field] = map[envKey];
     }
   }
-  if (map.RHUI_SERVICES !== undefined) payload.services = map.RHUI_SERVICES;
-  if (map.RHUI_DATA_PATH !== undefined) payload.dataPath = map.RHUI_DATA_PATH;
-  if (map.RHUI_ENTITLEMENT_CERT_PATH !== undefined) payload.certPath = map.RHUI_ENTITLEMENT_CERT_PATH;
-  if (map.RHUI_CLIENT_TLS_PORT !== undefined) payload.clientTlsPort = map.RHUI_CLIENT_TLS_PORT;
+  if (map.RHUI_REPO_FILTER !== undefined) payload.repoFilter = map.RHUI_REPO_FILTER;
   if (map.RHUI_MONITORED_REPOS !== undefined) payload.monitoredRepos = map.RHUI_MONITORED_REPOS;
   return payload;
 }
@@ -73,68 +71,90 @@ function fmtDate(d) {
   return dt.toLocaleString();
 }
 
-function renderServices(services) {
-  if (!services || !services.length) return '<p class="muted">No services configured</p>';
-  const rows = services
-    .map((s) => `<tr><td>${s.service}</td><td>${badge(s.state, s.healthy ? 'ok' : 'bad')}</td></tr>`)
-    .join('');
-  return `<table><thead><tr><th>Service</th><th>State</th></tr></thead><tbody>${rows}</tbody></table>`;
+function renderDns(dns) {
+  if (!dns) return '<p class="muted">No data</p>';
+  if (!dns.resolved) return `<p class="error-text">Could not resolve ${dns.host}: ${dns.error}</p>`;
+  return `<p>${dns.host} → <strong>${dns.ip}</strong> ${badge('Resolved', 'ok')}</p>`;
 }
 
-function renderDisk(disk) {
-  if (!disk) return '<p class="muted">No data</p>';
-  if (disk.error) return `<p class="error-text">${disk.error}</p>`;
-  return `<table>
-    <tr><td>Path</td><td>${disk.path}</td></tr>
-    <tr><td>Filesystem size</td><td>${disk.size || '—'}</td></tr>
-    <tr><td>Used / Available</td><td>${disk.used || '—'} / ${disk.available || '—'} (${disk.usePercent || '—'})</td></tr>
-    <tr><td>Data on disk</td><td>${disk.dataSize || '—'}</td></tr>
-  </table>`;
-}
-
-function renderCert(cert) {
+function renderServerCert(cert) {
   if (!cert) return '<p class="muted">No data</p>';
-  if (!cert.found) return `<p class="muted">Certificate not found at ${cert.path}</p>`;
-  const level = cert.daysRemaining < 14 ? 'bad' : cert.daysRemaining < 30 ? 'warn' : 'ok';
-  return `<table>
-    <tr><td>Expires</td><td>${fmtDate(cert.expiresAt)}</td></tr>
-    <tr><td>Days remaining</td><td>${badge(cert.daysRemaining, level)}</td></tr>
-  </table>`;
-}
-
-function renderClientTlsCert(cert) {
-  if (!cert) return '<p class="muted">No data</p>';
-  if (cert.error) return `<p class="error-text">${cert.error}</p>`;
+  if (!cert.found) return `<p class="error-text">${cert.error || 'Could not retrieve certificate'}</p>`;
   const level = cert.expired ? 'bad' : cert.daysRemaining < 30 ? 'warn' : 'ok';
-  const trustBadge = cert.trusted ? badge('Trusted', 'ok') : badge(cert.trustError || 'Not trusted', 'warn');
   return `<table>
     <tr><td>Subject</td><td>${cert.subject || '—'}</td></tr>
     <tr><td>Issuer</td><td>${cert.issuer || '—'}</td></tr>
-    <tr><td>Valid</td><td>${fmtDate(cert.validFrom)} → ${fmtDate(cert.validTo)}</td></tr>
+    <tr><td>Valid</td><td>${fmtDate(cert.notBefore)} → ${fmtDate(cert.notAfter)}</td></tr>
     <tr><td>Days remaining</td><td>${badge(cert.expired ? 'EXPIRED' : cert.daysRemaining, level)}</td></tr>
-    <tr><td>Chain trust</td><td>${trustBadge}</td></tr>
   </table>`;
 }
 
-function renderRepoFreshness(repos) {
-  if (!repos || !repos.length) return '<p class="muted">No monitored repos configured</p>';
-  const rows = repos
-    .map((r) => {
-      if (r.error) return `<tr class="repo-row error"><td>${r.repoId}</td><td colspan="3">${r.error}</td></tr>`;
-      const cls = r.inSync === true ? 'in-sync' : r.inSync === false ? 'out-of-sync' : '';
-      const lag = r.lagSeconds != null ? `${Math.round(r.lagSeconds / 3600)}h behind CDN` : (r.publicError || '—');
-      return `<tr class="repo-row ${cls}">
-        <td>${r.repoId}</td>
-        <td>${fmtDate(r.localRevision)}</td>
-        <td>${fmtDate(r.publicRevision)}</td>
-        <td>${lag}</td>
-      </tr>`;
-    })
-    .join('');
+function renderClientCert(cert) {
+  if (!cert) return '<p class="muted">No data</p>';
+  if (!cert.found) return `<p class="muted">${cert.error || 'No client certificate configured for this repo'}</p>`;
+  const level = cert.expired ? 'bad' : cert.daysRemaining < 30 ? 'warn' : 'ok';
   return `<table>
-    <thead><tr><th>Repo</th><th>Local sync</th><th>Public CDN</th><th>Lag</th></tr></thead>
-    <tbody>${rows}</tbody>
+    <tr><td>Path</td><td>${cert.path}</td></tr>
+    <tr><td>Subject</td><td>${cert.subject || '—'}</td></tr>
+    <tr><td>Expires</td><td>${fmtDate(cert.notAfter)}</td></tr>
+    <tr><td>Days remaining</td><td>${badge(cert.expired ? 'EXPIRED' : cert.daysRemaining, level)}</td></tr>
   </table>`;
+}
+
+function renderLiveFetch(fetchResult) {
+  if (!fetchResult) return '<p class="muted">No data</p>';
+  if (!fetchResult.success) return `<p class="error-text">Failed: ${fetchResult.error || 'unknown error'}</p>`;
+  return `<p>${badge('Success (HTTP 200)', 'ok')} — metadata revision ${fmtDate(fetchResult.localRevision)}</p>`;
+}
+
+function renderFreshness(freshness) {
+  if (!freshness) return '<p class="muted">No public CDN comparison configured for this repo</p>';
+  if (freshness.error) return `<p class="error-text">${freshness.error}</p>`;
+  const lag = freshness.lagSeconds != null ? Math.round(freshness.lagSeconds / 3600) : null;
+  const level = freshness.inSync ? 'ok' : lag != null && lag > 48 ? 'warn' : 'ok';
+  return `<p>Public CDN revision ${fmtDate(freshness.publicRevision)} — ${
+    lag != null ? badge(`${lag}h behind CDN`, level) : badge('unknown lag', 'muted')
+  }</p>`;
+}
+
+function renderRepoBlock(repo) {
+  if (repo.error) {
+    return `<div class="repo-block"><h3>${repo.id}</h3><p class="error-text">${repo.error}</p></div>`;
+  }
+  return `<div class="repo-block">
+    <h3>${repo.id} ${repo.enabled ? '' : badge('disabled', 'muted')}</h3>
+    <p class="muted">RHUI server: ${repo.cdsHost}:${repo.cdsPort} · defined in ${repo.file}</p>
+
+    <p class="check-explainer">DNS — can the client resolve the RHUI server's hostname?</p>
+    ${renderDns(repo.dns)}
+
+    <p class="check-explainer">Server certificate — the TLS certificate this RHUI server presents to the client. If expired or untrusted, updates fail with SSL errors.</p>
+    ${renderServerCert(repo.serverCert)}
+
+    <p class="check-explainer">Client entitlement certificate — the certificate this client uses to authenticate to RHUI. This is the one that most often expires and silently breaks updates.</p>
+    ${renderClientCert(repo.clientCert)}
+
+    <p class="check-explainer">Live metadata fetch — actually downloading this repo's metadata the same way yum/dnf would, using the same certificates.</p>
+    ${renderLiveFetch(repo.liveFetch)}
+
+    <p class="check-explainer">Freshness vs public Red Hat CDN — how far behind the public Red Hat mirrors this RHUI repo is. Some lag is normal; large or growing lag suggests a sync problem on IONOS's side.</p>
+    ${renderFreshness(repo.freshness)}
+  </div>`;
+}
+
+function renderLiveUpdateCheck(check) {
+  if (!check) return '<p class="muted">No data</p>';
+  if (!check.ran) return `<p class="muted">${check.reason || 'Not run'}</p>`;
+  if (check.error) return `<p class="error-text">${check.error}</p>`;
+  const statusBadge = check.success
+    ? check.updatesAvailable
+      ? badge('Updates available', 'ok')
+      : badge('Up to date', 'ok')
+    : badge(`Failed (exit ${check.exitCode})`, 'bad');
+  return `<div>
+    <p>${statusBadge}</p>
+    <pre class="output-block">${(check.output || '').replace(/</g, '&lt;')}</pre>
+  </div>`;
 }
 
 function renderHostCard(host) {
@@ -146,40 +166,40 @@ function renderHostCard(host) {
   }
 
   const reachable = host.connectivity && host.connectivity.reachable;
-  const statusBadge = reachable ? badge('Online', 'ok') : badge('Unreachable', 'bad');
+  const statusBadge = reachable ? badge('Diagnostics OK', 'ok') : badge('Unreachable', 'bad');
 
   if (!reachable) {
     return `<div class="card">
       <h2>${host.label} ${statusBadge}</h2>
       <div class="subtitle">${host.host}</div>
+      <p class="check-explainer">This app could not SSH into the test client itself to run diagnostics — this is a problem with the test client, not necessarily with RHUI.</p>
       <p class="error-text">${(host.connectivity && host.connectivity.error) || host.error || 'Unknown error'}</p>
-
-      <div class="section-title">Client-facing TLS certificate (what yum/dnf sees)</div>
-      ${renderClientTlsCert(host.clientTlsCert)}
     </div>`;
   }
 
+  if (host.error) {
+    return `<div class="card">
+      <h2>${host.label} ${badge('Error', 'bad')}</h2>
+      <div class="subtitle">${host.host} · ${host.osRelease || ''}</div>
+      <p class="error-text">${host.error}</p>
+    </div>`;
+  }
+
+  const repoBlocks = host.repos && host.repos.length
+    ? host.repos.map(renderRepoBlock).join('')
+    : `<p class="muted">No RHUI repos were found in /etc/yum.repos.d matching the configured filter. Check the "Repo filter" setting or verify this client is actually registered with RHUI.</p>`;
+
   return `<div class="card">
     <h2>${host.label} ${statusBadge}</h2>
-    <div class="subtitle">${host.host} · ${host.osRelease || ''} · latency ${host.connectivity.latencyMs}ms</div>
+    <div class="subtitle">${host.host} · ${host.osRelease || ''} · SSH latency ${host.connectivity.latencyMs}ms</div>
 
-    <div class="section-title">Services</div>
-    ${renderServices(host.services)}
+    <div class="section-title">RHUI repositories detected on this client</div>
+    <p class="check-explainer">Each block below is one RHUI repo this client is configured to use, checked exactly as yum/dnf would use it.</p>
+    ${repoBlocks}
 
-    <div class="section-title">Data / Disk availability</div>
-    ${renderDisk(host.disk)}
-
-    <div class="section-title">Update freshness vs public Red Hat CDN</div>
-    ${renderRepoFreshness(host.repoFreshness)}
-
-    <div class="section-title">Entitlement certificate</div>
-    ${renderCert(host.cert)}
-
-    <div class="section-title">Client-facing TLS certificate (what yum/dnf sees)</div>
-    ${renderClientTlsCert(host.clientTlsCert)}
-
-    <div class="section-title">Uptime</div>
-    <p class="muted">${host.uptime || '—'}</p>
+    <div class="section-title">Live update check (dnf check-update)</div>
+    <p class="check-explainer">The ground-truth test: actually asking dnf to refresh metadata for these RHUI repos, restricted to just them. This is exactly what runs during a real "dnf update".</p>
+    ${renderLiveUpdateCheck(host.liveUpdateCheck)}
   </div>`;
 }
 
@@ -215,8 +235,19 @@ function formToConfigPayload(form) {
   return payload;
 }
 
+async function loadVersion() {
+  try {
+    const resp = await fetch('/api/version');
+    const { version } = await resp.json();
+    els.versionPill.textContent = `v${version}`;
+  } catch (err) {
+    els.versionPill.textContent = '';
+  }
+}
+
 async function init() {
   show(els.loading);
+  loadVersion();
   const statusResp = await fetch('/api/config/status');
   const { configured } = await statusResp.json();
 

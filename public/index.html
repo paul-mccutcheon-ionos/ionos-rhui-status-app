@@ -14,6 +14,7 @@
   <div class="topbar-brand">
     <img src="/assets/ionos-logo.png" alt="IONOS Cloud" class="brand-logo" />
     <h1>RHUI Status</h1>
+    <span id="version-pill" class="badge badge-muted version-pill"></span>
   </div>
   <div class="topbar-actions">
     <span id="last-updated" class="muted"></span>
@@ -30,14 +31,25 @@
 <main id="app">
   <section id="setup-view" class="hidden">
     <h2>Setup</h2>
+    <div class="intro-box">
+      <p>
+        <strong>What this app checks.</strong> IONOS runs the RHUI (Red Hat Update Infrastructure) servers that
+        supply RHEL updates to your VMs, but this dashboard does not have direct access to that infrastructure.
+        Instead, it uses SSH to log into a <strong>test client</strong> you provide below — a RHEL 8 and/or RHEL 9
+        VM that is already registered to pull updates from IONOS RHUI — and runs the exact same checks a real
+        update would run: reading its repo configuration, resolving and reaching the RHUI server, validating
+        certificates, and attempting a live metadata fetch. This shows you precisely what a customer's server
+        experiences when it tries to update, and where in that chain a failure is happening.
+      </p>
+    </div>
     <p class="muted">
-      No configuration was found in <code>.env</code>. Enter details for RHEL 8, RHEL 9, or both — whichever hosts
-      you want monitored. Values are kept in server memory for this session unless you click "Save to .env".
+      Enter details for RHEL 8, RHEL 9, or both — whichever test clients you have available. Values are kept in
+      server memory for this session unless you click "Save to .env".
     </p>
     <form id="setup-form">
       <div class="host-columns">
         <fieldset>
-          <legend>RHEL 8 Host</legend>
+          <legend>RHEL 8 test client</legend>
           <label>Label <input name="rhel8.label" placeholder="RHUI RHEL 8" /></label>
           <label>Host / IP <input name="rhel8.host" placeholder="10.0.0.10" /></label>
           <label>SSH Port <input name="rhel8.port" type="number" value="22" /></label>
@@ -49,7 +61,7 @@
           <label>Key Passphrase (if any) <input name="rhel8.passphrase" type="password" /></label>
         </fieldset>
         <fieldset>
-          <legend>RHEL 9 Host</legend>
+          <legend>RHEL 9 test client</legend>
           <label>Label <input name="rhel9.label" placeholder="RHUI RHEL 9" /></label>
           <label>Host / IP <input name="rhel9.host" placeholder="10.0.0.11" /></label>
           <label>SSH Port <input name="rhel9.port" type="number" value="22" /></label>
@@ -63,15 +75,12 @@
       </div>
 
       <fieldset>
-        <legend>RHUI Checks</legend>
-        <label>Services to check (comma-separated)
-          <input name="services" value="httpd,pulpcore-api,pulpcore-content,pulpcore-worker@1,pulpcore-worker@2,nginx,squid" />
+        <legend>RHUI detection</legend>
+        <label>Repo filter — used to pick the RHUI entries out of the client's /etc/yum.repos.d (case-insensitive substring match on repo id or URL)
+          <input name="repoFilter" value="rhui" />
         </label>
-        <label>Data path <input name="dataPath" value="/var/lib/pulp" /></label>
-        <label>Entitlement cert path <input name="certPath" value="/etc/pki/entitlement/entitlement.pem" /></label>
-        <label>Client-facing TLS port (checked directly, no SSH) <input name="clientTlsPort" type="number" value="443" /></label>
-        <label>Monitored repos (repoId|localRepomdPath|publicRepomdUrl; separated by ;)
-          <textarea name="monitoredRepos" rows="3"></textarea>
+        <label>Public CDN comparison (optional) — repoId|publicRepomdUrl pairs separated by ";". If a discovered repo's id matches one of these, its update freshness is compared against the public Red Hat CDN.
+          <textarea name="monitoredRepos" rows="3" placeholder="rhel-8-for-x86_64-baseos-rhui-rpms|https://cdn.redhat.com/content/dist/rhel8/8/x86_64/baseos/os/repodata/repomd.xml"></textarea>
         </label>
       </fieldset>
 

@@ -1,6 +1,7 @@
 const express = require('express');
 const config = require('../config');
 const rhuiChecks = require('../rhuiChecks');
+const packageJson = require('../../package.json');
 
 const router = express.Router();
 
@@ -23,6 +24,10 @@ async function refreshStatus() {
   return checkInFlight;
 }
 
+router.get('/version', (req, res) => {
+  res.json({ version: packageJson.version });
+});
+
 router.get('/config/status', (req, res) => {
   res.json({ configured: config.isConfigured() });
 });
@@ -40,10 +45,7 @@ router.get('/config', (req, res) => {
   });
   res.json({
     hosts: { rhel8: redact(cfg.hosts.rhel8), rhel9: redact(cfg.hosts.rhel9) },
-    services: cfg.services,
-    dataPath: cfg.dataPath,
-    certPath: cfg.certPath,
-    clientTlsPort: cfg.clientTlsPort,
+    repoFilter: cfg.repoFilter,
     monitoredRepos: cfg.monitoredRepos,
     pollIntervalSeconds: cfg.pollIntervalSeconds,
   });
@@ -65,10 +67,7 @@ router.post('/config', (req, res) => {
     if (h.passphrase !== undefined) overrides[`${prefix}_SSH_PASSPHRASE`] = h.passphrase;
   }
 
-  if (body.services !== undefined) overrides.RHUI_SERVICES = body.services;
-  if (body.dataPath !== undefined) overrides.RHUI_DATA_PATH = body.dataPath;
-  if (body.certPath !== undefined) overrides.RHUI_ENTITLEMENT_CERT_PATH = body.certPath;
-  if (body.clientTlsPort !== undefined) overrides.RHUI_CLIENT_TLS_PORT = String(body.clientTlsPort);
+  if (body.repoFilter !== undefined) overrides.RHUI_REPO_FILTER = body.repoFilter;
   if (body.monitoredRepos !== undefined) overrides.RHUI_MONITORED_REPOS = body.monitoredRepos;
 
   config.setOverrides(overrides);

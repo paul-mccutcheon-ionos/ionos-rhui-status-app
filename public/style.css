@@ -41,6 +41,53 @@ body {
   border-left: 1px solid rgba(255,255,255,0.35);
 }
 
+.version-pill {
+  font-family: monospace;
+  background: rgba(255,255,255,0.15);
+  color: white;
+}
+
+.intro-box {
+  background: #eaf1fb;
+  border: 1px solid #c8dbf5;
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.check-explainer {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 6px;
+}
+
+.repo-block {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+
+.repo-block h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+
+pre.output-block {
+  background: #10151c;
+  color: #d8e4f0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  overflow-x: auto;
+  max-height: 260px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .topbar-actions { display: flex; align-items: center; gap: 12px; }
 
 .file-btn { position: relative; overflow: hidden; }

@@ -14,8 +14,7 @@ const FIELDS = [
   'RHEL8_SSH_KEY_PATH', 'RHEL8_SSH_KEY_CONTENT', 'RHEL8_SSH_PASSPHRASE',
   'RHEL9_LABEL', 'RHEL9_HOST', 'RHEL9_SSH_PORT', 'RHEL9_SSH_USER',
   'RHEL9_SSH_KEY_PATH', 'RHEL9_SSH_KEY_CONTENT', 'RHEL9_SSH_PASSPHRASE',
-  'RHUI_SERVICES', 'RHUI_DATA_PATH', 'RHUI_ENTITLEMENT_CERT_PATH',
-  'RHUI_MONITORED_REPOS', 'RHUI_CLIENT_TLS_PORT', 'SSH_TIMEOUT_MS', 'CDN_TIMEOUT_MS',
+  'RHUI_REPO_FILTER', 'RHUI_MONITORED_REPOS', 'SSH_TIMEOUT_MS', 'CDN_TIMEOUT_MS',
   'STATUS_POLL_INTERVAL_SECONDS',
 ];
 
@@ -50,6 +49,10 @@ function parseHostConfig(prefix) {
   };
 }
 
+// Optional manual mapping used to compare a discovered RHUI repo's metadata
+// against the corresponding public Red Hat CDN repo. There is no reliable
+// way to derive the public URL from the private RHUI baseurl automatically,
+// so this is opt-in: repoId|publicRepomdUrl pairs, semicolon-separated.
 function parseMonitoredRepos() {
   const raw = get('RHUI_MONITORED_REPOS') || '';
   return raw
@@ -57,10 +60,10 @@ function parseMonitoredRepos() {
     .map((entry) => entry.trim())
     .filter(Boolean)
     .map((entry) => {
-      const [repoId, localRepomdPath, publicRepomdUrl] = entry.split('|').map((s) => (s || '').trim());
-      return { repoId, localRepomdPath, publicRepomdUrl };
+      const [repoId, publicRepomdUrl] = entry.split('|').map((s) => (s || '').trim());
+      return { repoId, publicRepomdUrl };
     })
-    .filter((r) => r.repoId && r.localRepomdPath && r.publicRepomdUrl);
+    .filter((r) => r.repoId && r.publicRepomdUrl);
 }
 
 function getConfig() {
@@ -71,13 +74,9 @@ function getConfig() {
       rhel8: parseHostConfig('RHEL8'),
       rhel9: parseHostConfig('RHEL9'),
     },
-    services: (get('RHUI_SERVICES') || '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean),
-    dataPath: get('RHUI_DATA_PATH') || '/var/lib/pulp',
-    certPath: get('RHUI_ENTITLEMENT_CERT_PATH') || '/etc/pki/entitlement/entitlement.pem',
-    clientTlsPort: parseInt(get('RHUI_CLIENT_TLS_PORT') || '443', 10),
+    // Substring match (case-insensitive) against repo id/baseurl used to pick
+    // out the RHUI repos from everything in /etc/yum.repos.d on the client.
+    repoFilter: get('RHUI_REPO_FILTER') || 'rhui',
     monitoredRepos: parseMonitoredRepos(),
     sshTimeoutMs: parseInt(get('SSH_TIMEOUT_MS') || '8000', 10),
     cdnTimeoutMs: parseInt(get('CDN_TIMEOUT_MS') || '8000', 10),
@@ -110,14 +109,8 @@ function saveOverridesToEnvFile() {
     push(`${prefix}_SSH_PASSPHRASE`, h.passphrase);
   }
 
-  push('RHUI_SERVICES', cfg.services.join(','));
-  push('RHUI_DATA_PATH', cfg.dataPath);
-  push('RHUI_ENTITLEMENT_CERT_PATH', cfg.certPath);
-  push('RHUI_CLIENT_TLS_PORT', cfg.clientTlsPort);
-  push(
-    'RHUI_MONITORED_REPOS',
-    cfg.monitoredRepos.map((r) => `${r.repoId}|${r.localRepomdPath}|${r.publicRepomdUrl}`).join(';')
-  );
+  push('RHUI_REPO_FILTER', cfg.repoFilter);
+  push('RHUI_MONITORED_REPOS', cfg.monitoredRepos.map((r) => `${r.repoId}|${r.publicRepomdUrl}`).join(';'));
   push('SSH_TIMEOUT_MS', cfg.sshTimeoutMs);
   push('CDN_TIMEOUT_MS', cfg.cdnTimeoutMs);
   push('STATUS_POLL_INTERVAL_SECONDS', cfg.pollIntervalSeconds);
