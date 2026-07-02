@@ -1,4 +1,5 @@
 const axios = require('axios');
+const tls = require('tls');
 const ssh = require('./sshService');
 
 function parseRepomdRevision(xml) {
@@ -96,6 +97,56 @@ async function checkCertExpiry(conn, certPath, timeoutMs) {
   }
 }
 
+// Connects over TLS the same way an RHEL client's yum/dnf does when it hits
+// the RHUI content server, so the certificate seen (and its expiry) matches
+// what actually breaks client updates -- independent of SSH/management access.
+async function checkClientTlsCertificate(host, port, timeoutMs) {
+  return new Promise((resolve) => {
+    const result = { host, port };
+    let settled = false;
+    const finish = (extra) => {
+      if (settled) return;
+      settled = true;
+      resolve({ ...result, ...extra });
+    };
+
+    const socket = tls.connect(
+      { host, port, servername: host, rejectUnauthorized: false, timeout: timeoutMs },
+      () => {
+        const cert = socket.getPeerCertificate();
+        if (!cert || !Object.keys(cert).length) {
+          socket.end();
+          finish({ error: 'Server did not present a certificate' });
+          return;
+        }
+        const validFrom = new Date(cert.valid_from);
+        const validTo = new Date(cert.valid_to);
+        const daysRemaining = Math.round((validTo.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+        finish({
+          subject: (cert.subject && (cert.subject.CN || JSON.stringify(cert.subject))) || null,
+          issuer: (cert.issuer && (cert.issuer.CN || JSON.stringify(cert.issuer))) || null,
+          validFrom,
+          validTo,
+          daysRemaining,
+          expired: daysRemaining < 0,
+          trusted: socket.authorized,
+          trustError: socket.authorized ? null : socket.authorizationError,
+        });
+        socket.end();
+      }
+    );
+
+    socket.setTimeout(timeoutMs, () => {
+      socket.destroy();
+      finish({ error: `TLS connection timed out after ${timeoutMs}ms` });
+    });
+
+    socket.on('error', (err) => {
+      finish({ error: err.message });
+    });
+  });
+}
+
 async function fetchPublicRepomd(url, timeoutMs) {
   const resp = await axios.get(url, { timeout: timeoutMs, responseType: 'text', transformResponse: [(d) => d] });
   return resp.data;
@@ -137,9 +188,13 @@ async function checkHost(hostKey, hostCfg, cfg) {
     return { ...base, configured: false };
   }
 
-  const connectivity = await checkConnectivity(hostCfg, cfg.sshTimeoutMs);
+  const [connectivity, clientTlsCert] = await Promise.all([
+    checkConnectivity(hostCfg, cfg.sshTimeoutMs),
+    checkClientTlsCertificate(hostCfg.host, cfg.clientTlsPort, cfg.sshTimeoutMs),
+  ]);
+
   if (!connectivity.reachable) {
-    return { ...base, configured: true, connectivity, checkedAt: new Date() };
+    return { ...base, configured: true, connectivity, clientTlsCert, checkedAt: new Date() };
   }
 
   let conn;
@@ -170,11 +225,12 @@ async function checkHost(hostKey, hostCfg, cfg) {
       disk,
       uptime,
       cert,
+      clientTlsCert,
       repoFreshness,
       checkedAt: new Date(),
     };
   } catch (err) {
-    return { ...base, configured: true, connectivity, error: err.message, checkedAt: new Date() };
+    return { ...base, configured: true, connectivity, clientTlsCert, error: err.message, checkedAt: new Date() };
   } finally {
     if (conn) conn.end();
   }

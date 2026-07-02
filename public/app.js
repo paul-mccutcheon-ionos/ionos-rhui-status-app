@@ -48,6 +48,7 @@ function envMapToPayload(map) {
   if (map.RHUI_SERVICES !== undefined) payload.services = map.RHUI_SERVICES;
   if (map.RHUI_DATA_PATH !== undefined) payload.dataPath = map.RHUI_DATA_PATH;
   if (map.RHUI_ENTITLEMENT_CERT_PATH !== undefined) payload.certPath = map.RHUI_ENTITLEMENT_CERT_PATH;
+  if (map.RHUI_CLIENT_TLS_PORT !== undefined) payload.clientTlsPort = map.RHUI_CLIENT_TLS_PORT;
   if (map.RHUI_MONITORED_REPOS !== undefined) payload.monitoredRepos = map.RHUI_MONITORED_REPOS;
   return payload;
 }
@@ -101,6 +102,20 @@ function renderCert(cert) {
   </table>`;
 }
 
+function renderClientTlsCert(cert) {
+  if (!cert) return '<p class="muted">No data</p>';
+  if (cert.error) return `<p class="error-text">${cert.error}</p>`;
+  const level = cert.expired ? 'bad' : cert.daysRemaining < 30 ? 'warn' : 'ok';
+  const trustBadge = cert.trusted ? badge('Trusted', 'ok') : badge(cert.trustError || 'Not trusted', 'warn');
+  return `<table>
+    <tr><td>Subject</td><td>${cert.subject || '—'}</td></tr>
+    <tr><td>Issuer</td><td>${cert.issuer || '—'}</td></tr>
+    <tr><td>Valid</td><td>${fmtDate(cert.validFrom)} → ${fmtDate(cert.validTo)}</td></tr>
+    <tr><td>Days remaining</td><td>${badge(cert.expired ? 'EXPIRED' : cert.daysRemaining, level)}</td></tr>
+    <tr><td>Chain trust</td><td>${trustBadge}</td></tr>
+  </table>`;
+}
+
 function renderRepoFreshness(repos) {
   if (!repos || !repos.length) return '<p class="muted">No monitored repos configured</p>';
   const rows = repos
@@ -138,6 +153,9 @@ function renderHostCard(host) {
       <h2>${host.label} ${statusBadge}</h2>
       <div class="subtitle">${host.host}</div>
       <p class="error-text">${(host.connectivity && host.connectivity.error) || host.error || 'Unknown error'}</p>
+
+      <div class="section-title">Client-facing TLS certificate (what yum/dnf sees)</div>
+      ${renderClientTlsCert(host.clientTlsCert)}
     </div>`;
   }
 
@@ -156,6 +174,9 @@ function renderHostCard(host) {
 
     <div class="section-title">Entitlement certificate</div>
     ${renderCert(host.cert)}
+
+    <div class="section-title">Client-facing TLS certificate (what yum/dnf sees)</div>
+    ${renderClientTlsCert(host.clientTlsCert)}
 
     <div class="section-title">Uptime</div>
     <p class="muted">${host.uptime || '—'}</p>

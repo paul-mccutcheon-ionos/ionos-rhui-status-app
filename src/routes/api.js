@@ -43,6 +43,7 @@ router.get('/config', (req, res) => {
     services: cfg.services,
     dataPath: cfg.dataPath,
     certPath: cfg.certPath,
+    clientTlsPort: cfg.clientTlsPort,
     monitoredRepos: cfg.monitoredRepos,
     pollIntervalSeconds: cfg.pollIntervalSeconds,
   });
@@ -67,6 +68,7 @@ router.post('/config', (req, res) => {
   if (body.services !== undefined) overrides.RHUI_SERVICES = body.services;
   if (body.dataPath !== undefined) overrides.RHUI_DATA_PATH = body.dataPath;
   if (body.certPath !== undefined) overrides.RHUI_ENTITLEMENT_CERT_PATH = body.certPath;
+  if (body.clientTlsPort !== undefined) overrides.RHUI_CLIENT_TLS_PORT = String(body.clientTlsPort);
   if (body.monitoredRepos !== undefined) overrides.RHUI_MONITORED_REPOS = body.monitoredRepos;
 
   config.setOverrides(overrides);

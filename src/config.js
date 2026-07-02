@@ -15,7 +15,7 @@ const FIELDS = [
   'RHEL9_LABEL', 'RHEL9_HOST', 'RHEL9_SSH_PORT', 'RHEL9_SSH_USER',
   'RHEL9_SSH_KEY_PATH', 'RHEL9_SSH_KEY_CONTENT', 'RHEL9_SSH_PASSPHRASE',
   'RHUI_SERVICES', 'RHUI_DATA_PATH', 'RHUI_ENTITLEMENT_CERT_PATH',
-  'RHUI_MONITORED_REPOS', 'SSH_TIMEOUT_MS', 'CDN_TIMEOUT_MS',
+  'RHUI_MONITORED_REPOS', 'RHUI_CLIENT_TLS_PORT', 'SSH_TIMEOUT_MS', 'CDN_TIMEOUT_MS',
   'STATUS_POLL_INTERVAL_SECONDS',
 ];
 
@@ -77,6 +77,7 @@ function getConfig() {
       .filter(Boolean),
     dataPath: get('RHUI_DATA_PATH') || '/var/lib/pulp',
     certPath: get('RHUI_ENTITLEMENT_CERT_PATH') || '/etc/pki/entitlement/entitlement.pem',
+    clientTlsPort: parseInt(get('RHUI_CLIENT_TLS_PORT') || '443', 10),
     monitoredRepos: parseMonitoredRepos(),
     sshTimeoutMs: parseInt(get('SSH_TIMEOUT_MS') || '8000', 10),
     cdnTimeoutMs: parseInt(get('CDN_TIMEOUT_MS') || '8000', 10),
@@ -112,6 +113,7 @@ function saveOverridesToEnvFile() {
   push('RHUI_SERVICES', cfg.services.join(','));
   push('RHUI_DATA_PATH', cfg.dataPath);
   push('RHUI_ENTITLEMENT_CERT_PATH', cfg.certPath);
+  push('RHUI_CLIENT_TLS_PORT', cfg.clientTlsPort);
   push(
     'RHUI_MONITORED_REPOS',
     cfg.monitoredRepos.map((r) => `${r.repoId}|${r.localRepomdPath}|${r.publicRepomdUrl}`).join(';')
