@@ -1,0 +1,9 @@
+node_modules/
+.env
+*.pem
+*.key
+web1.conf
+.tmp-keys/
+npm-debug.log*
+.DS_Store
+ionos.conf

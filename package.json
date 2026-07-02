@@ -1,0 +1,18 @@
+{
+  "name": "ionos-rhui-status-app",
+  "version": "1.0.0",
+  "description": "Dashboard for monitoring the status of IONOS-hosted internal RHUI (Red Hat Update Infrastructure) servers.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "ssh2": "^1.16.0"
+  }
+}

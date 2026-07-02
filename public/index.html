@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>IONOS RHUI Status</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-brand">
+    <img src="/assets/ionos-logo.svg" alt="IONOS Cloud" class="brand-logo" />
+    <h1>RHUI Status</h1>
+  </div>
+  <div class="topbar-actions">
+    <span id="last-updated" class="muted"></span>
+    <button id="refresh-btn" class="btn">Refresh</button>
+    <button id="setup-btn" class="btn btn-secondary">Configuration</button>
+    <label class="btn btn-secondary file-btn">
+      Upload .env
+      <input type="file" id="env-upload" accept=".env,text/plain" hidden />
+    </label>
+    <a class="btn btn-secondary" href="/.env.example" download="env.example">Download .env.example</a>
+  </div>
+</header>
+
+<main id="app">
+  <section id="setup-view" class="hidden">
+    <h2>Setup</h2>
+    <p class="muted">
+      No configuration was found in <code>.env</code>. Enter your RHEL 8 and RHEL 9 RHUI host details below.
+      Values are kept in server memory for this session unless you click "Save to .env".
+    </p>
+    <form id="setup-form">
+      <div class="host-columns">
+        <fieldset>
+          <legend>RHEL 8 Host</legend>
+          <label>Label <input name="rhel8.label" placeholder="RHUI RHEL 8" /></label>
+          <label>Host / IP <input name="rhel8.host" placeholder="10.0.0.10" required /></label>
+          <label>SSH Port <input name="rhel8.port" type="number" value="22" /></label>
+          <label>SSH User <input name="rhel8.username" placeholder="cloud-user" required /></label>
+          <label>SSH Key Path (on server) <input name="rhel8.keyPath" placeholder="/home/app/.ssh/rhel8_key" /></label>
+          <label>-- OR paste SSH Key content --
+            <textarea name="rhel8.keyContent" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
+          </label>
+          <label>Key Passphrase (if any) <input name="rhel8.passphrase" type="password" /></label>
+        </fieldset>
+        <fieldset>
+          <legend>RHEL 9 Host</legend>
+          <label>Label <input name="rhel9.label" placeholder="RHUI RHEL 9" /></label>
+          <label>Host / IP <input name="rhel9.host" placeholder="10.0.0.11" required /></label>
+          <label>SSH Port <input name="rhel9.port" type="number" value="22" /></label>
+          <label>SSH User <input name="rhel9.username" placeholder="cloud-user" required /></label>
+          <label>SSH Key Path (on server) <input name="rhel9.keyPath" placeholder="/home/app/.ssh/rhel9_key" /></label>
+          <label>-- OR paste SSH Key content --
+            <textarea name="rhel9.keyContent" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
+          </label>
+          <label>Key Passphrase (if any) <input name="rhel9.passphrase" type="password" /></label>
+        </fieldset>
+      </div>
+
+      <fieldset>
+        <legend>RHUI Checks</legend>
+        <label>Services to check (comma-separated)
+          <input name="services" value="httpd,pulpcore-api,pulpcore-content,pulpcore-worker@1,pulpcore-worker@2,nginx,squid" />
+        </label>
+        <label>Data path <input name="dataPath" value="/var/lib/pulp" /></label>
+        <label>Entitlement cert path <input name="certPath" value="/etc/pki/entitlement/entitlement.pem" /></label>
+        <label>Monitored repos (repoId|localRepomdPath|publicRepomdUrl; separated by ;)
+          <textarea name="monitoredRepos" rows="3"></textarea>
+        </label>
+      </fieldset>
+
+      <div class="form-actions">
+        <button type="submit" class="btn">Apply configuration</button>
+        <button type="button" id="save-env-btn" class="btn btn-secondary">Save to .env on server</button>
+      </div>
+      <p id="setup-status" class="muted"></p>
+    </form>
+  </section>
+
+  <section id="dashboard-view" class="hidden">
+    <div id="host-cards" class="host-cards"></div>
+  </section>
+
+  <section id="loading-view">
+    <p class="muted">Loading…</p>
+  </section>
+</main>
+
+<script src="/app.js"></script>
+</body>
+</html>
