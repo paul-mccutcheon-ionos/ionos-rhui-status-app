@@ -7,3 +7,4 @@ web1.conf
 npm-debug.log*
 .DS_Store
 ionos.conf
+.claude/

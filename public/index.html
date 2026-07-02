@@ -31,17 +31,17 @@
   <section id="setup-view" class="hidden">
     <h2>Setup</h2>
     <p class="muted">
-      No configuration was found in <code>.env</code>. Enter your RHEL 8 and RHEL 9 RHUI host details below.
-      Values are kept in server memory for this session unless you click "Save to .env".
+      No configuration was found in <code>.env</code>. Enter details for RHEL 8, RHEL 9, or both — whichever hosts
+      you want monitored. Values are kept in server memory for this session unless you click "Save to .env".
     </p>
     <form id="setup-form">
       <div class="host-columns">
         <fieldset>
           <legend>RHEL 8 Host</legend>
           <label>Label <input name="rhel8.label" placeholder="RHUI RHEL 8" /></label>
-          <label>Host / IP <input name="rhel8.host" placeholder="10.0.0.10" required /></label>
+          <label>Host / IP <input name="rhel8.host" placeholder="10.0.0.10" /></label>
           <label>SSH Port <input name="rhel8.port" type="number" value="22" /></label>
-          <label>SSH User <input name="rhel8.username" placeholder="cloud-user" required /></label>
+          <label>SSH User <input name="rhel8.username" placeholder="cloud-user" /></label>
           <label>SSH Key Path (on server) <input name="rhel8.keyPath" placeholder="/home/app/.ssh/rhel8_key" /></label>
           <label>-- OR paste SSH Key content --
             <textarea name="rhel8.keyContent" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
@@ -51,9 +51,9 @@
         <fieldset>
           <legend>RHEL 9 Host</legend>
           <label>Label <input name="rhel9.label" placeholder="RHUI RHEL 9" /></label>
-          <label>Host / IP <input name="rhel9.host" placeholder="10.0.0.11" required /></label>
+          <label>Host / IP <input name="rhel9.host" placeholder="10.0.0.11" /></label>
           <label>SSH Port <input name="rhel9.port" type="number" value="22" /></label>
-          <label>SSH User <input name="rhel9.username" placeholder="cloud-user" required /></label>
+          <label>SSH User <input name="rhel9.username" placeholder="cloud-user" /></label>
           <label>SSH Key Path (on server) <input name="rhel9.keyPath" placeholder="/home/app/.ssh/rhel9_key" /></label>
           <label>-- OR paste SSH Key content --
             <textarea name="rhel9.keyContent" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>

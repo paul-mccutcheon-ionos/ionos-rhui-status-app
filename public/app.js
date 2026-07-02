@@ -179,6 +179,10 @@ async function loadStatus(force) {
   }
 }
 
+function hostIsFilled(h) {
+  return Boolean(h && h.host && h.username && (h.keyPath || h.keyContent));
+}
+
 function formToConfigPayload(form) {
   const data = new FormData(form);
   const payload = { rhel8: {}, rhel9: {} };
@@ -212,9 +216,13 @@ els.setupBtn.addEventListener('click', () => {
 
 els.setupForm.addEventListener('submit', async (e) => {
   e.preventDefault();
+  const payload = formToConfigPayload(els.setupForm);
+  if (!hostIsFilled(payload.rhel8) && !hostIsFilled(payload.rhel9)) {
+    els.setupStatus.textContent = 'Error: fill in host, SSH user, and a key (path or content) for at least one host (RHEL 8 or RHEL 9).';
+    return;
+  }
   els.setupStatus.textContent = 'Applying…';
   try {
-    const payload = formToConfigPayload(els.setupForm);
     const resp = await fetch('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -231,9 +239,13 @@ els.setupForm.addEventListener('submit', async (e) => {
 });
 
 els.saveEnvBtn.addEventListener('click', async () => {
+  const payload = formToConfigPayload(els.setupForm);
+  if (!hostIsFilled(payload.rhel8) && !hostIsFilled(payload.rhel9)) {
+    els.setupStatus.textContent = 'Error: fill in host, SSH user, and a key (path or content) for at least one host (RHEL 8 or RHEL 9).';
+    return;
+  }
   els.setupStatus.textContent = 'Saving to .env…';
   try {
-    const payload = formToConfigPayload(els.setupForm);
     await fetch('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
