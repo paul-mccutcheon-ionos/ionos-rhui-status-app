@@ -117,29 +117,78 @@ function renderFreshness(freshness) {
   }</p>`;
 }
 
-function renderRepoBlock(repo) {
-  if (repo.error) {
-    return `<div class="repo-block"><h3>${repo.id}</h3><p class="error-text">${repo.error}</p></div>`;
-  }
+function renderPing(ping) {
+  if (!ping) return '<p class="muted">No data</p>';
+  if (ping.error) return `<p class="muted">${ping.error}</p>`;
+  if (!ping.responded) return `<p class="muted">${badge('No response', 'muted')} ${ping.note || ''}</p>`;
+  return `<p>${badge('Responds to ping', 'ok')} avg ${ping.avgRttMs}ms</p>`;
+}
+
+function renderServerBlock(server) {
   return `<div class="repo-block">
-    <h3>${repo.id} ${repo.enabled ? '' : badge('disabled', 'muted')}</h3>
-    <p class="muted">RHUI server: ${repo.cdsHost}:${repo.cdsPort} · defined in ${repo.file}</p>
+    <h3>${server.host}:${server.port}</h3>
 
     <p class="check-explainer">DNS — can the client resolve the RHUI server's hostname?</p>
-    ${renderDns(repo.dns)}
+    ${renderDns(server.dns)}
+
+    <p class="check-explainer">Ping — basic ICMP reachability. Informational only: many firewalls block ICMP even when the actual service works fine.</p>
+    ${renderPing(server.ping)}
 
     <p class="check-explainer">Server certificate — the TLS certificate this RHUI server presents to the client. If expired or untrusted, updates fail with SSL errors.</p>
-    ${renderServerCert(repo.serverCert)}
-
-    <p class="check-explainer">Client entitlement certificate — the certificate this client uses to authenticate to RHUI. This is the one that most often expires and silently breaks updates.</p>
-    ${renderClientCert(repo.clientCert)}
-
-    <p class="check-explainer">Live metadata fetch — actually downloading this repo's metadata the same way yum/dnf would, using the same certificates.</p>
-    ${renderLiveFetch(repo.liveFetch)}
-
-    <p class="check-explainer">Freshness vs public Red Hat CDN — how far behind the public Red Hat mirrors this RHUI repo is. Some lag is normal; large or growing lag suggests a sync problem on IONOS's side.</p>
-    ${renderFreshness(repo.freshness)}
+    ${renderServerCert(server.cert)}
   </div>`;
+}
+
+function renderRepoRow(repo) {
+  if (repo.error) {
+    return `<tr><td>${repo.id}</td><td colspan="4" class="error-text">${repo.error}</td></tr>`;
+  }
+  const fetchOk = repo.liveFetch && repo.liveFetch.success;
+  const fetchCell = fetchOk
+    ? badge('OK', 'ok')
+    : badge(repo.liveFetch ? repo.liveFetch.error || 'Failed' : 'No data', 'bad');
+  const lag = repo.freshness && repo.freshness.lagSeconds != null ? `${Math.round(repo.freshness.lagSeconds / 3600)}h` : '—';
+  return `<tr>
+    <td>${repo.id}</td>
+    <td>${repo.enabled ? badge('enabled', 'ok') : badge('disabled', 'warn')}</td>
+    <td>${fetchCell}</td>
+    <td>${lag}</td>
+  </tr>`;
+}
+
+function renderClientCertSummary(repos) {
+  const seen = new Map();
+  for (const repo of repos) {
+    if (repo.clientCertPath && !seen.has(repo.clientCertPath)) seen.set(repo.clientCertPath, repo.clientCert);
+  }
+  if (!seen.size) return '<p class="muted">No client certificate referenced by any discovered repo</p>';
+  return [...seen.entries()].map(([, cert]) => renderClientCert(cert)).join('');
+}
+
+function renderSubscriptionManager(sm) {
+  if (!sm) return '<p class="muted">No data</p>';
+  if (!sm.ran) return `<p class="error-text">Could not run subscription-manager: ${sm.error}</p>`;
+  if (sm.expectedForRhui) {
+    return `<p>${badge(sm.overallStatus || 'Unknown/unregistered', 'ok')} — this is the <strong>correct</strong> state for an IONOS RHUI-managed host. It should NOT be registered directly with Red Hat.</p>`;
+  }
+  return `<p>${badge(sm.overallStatus || 'Registered', 'warn')} — this host appears to be registered directly with Red Hat as well as using IONOS RHUI. Check for accidental double-billing.</p>`;
+}
+
+function renderIssues(issues, hostKey) {
+  if (!issues || !issues.length) return '<p class="muted">No configuration issues detected.</p>';
+  return issues
+    .map(
+      (issue) => `<div class="repo-block">
+        <p>${badge(issue.severity === 'warning' ? 'Issue' : 'Error', issue.severity === 'warning' ? 'warn' : 'bad')} ${issue.message}</p>
+        ${
+          issue.fixId
+            ? `<p class="muted">Fix command: <code>${issue.fixCommand}</code></p>
+               <button class="btn fix-btn" data-host-key="${hostKey}" data-fix-id="${issue.fixId}" data-repo-ids='${JSON.stringify(issue.repoIds)}'>${issue.fixLabel}</button>`
+            : ''
+        }
+      </div>`
+    )
+    .join('');
 }
 
 function renderLiveUpdateCheck(check) {
@@ -185,21 +234,49 @@ function renderHostCard(host) {
     </div>`;
   }
 
-  const repoBlocks = host.repos && host.repos.length
-    ? host.repos.map(renderRepoBlock).join('')
-    : `<p class="muted">No RHUI repos were found in /etc/yum.repos.d matching the configured filter. Check the "Repo filter" setting or verify this client is actually registered with RHUI.</p>`;
+  const repos = host.clientSide && host.clientSide.repos;
+  if (!repos || !repos.length) {
+    return `<div class="card">
+      <h2>${host.label} ${statusBadge}</h2>
+      <div class="subtitle">${host.host} · ${host.osRelease || ''}</div>
+      <p class="muted">No RHUI repos were found in /etc/yum.repos.d matching the configured filter. Check the "Repo filter" setting or verify this client is actually registered with RHUI.</p>
+    </div>`;
+  }
+
+  const servers = (host.serverSide && host.serverSide.servers) || [];
+  const serverBlocks = servers.map(renderServerBlock).join('');
+
+  const repoRows = repos.map(renderRepoRow).join('');
 
   return `<div class="card">
     <h2>${host.label} ${statusBadge}</h2>
     <div class="subtitle">${host.host} · ${host.osRelease || ''} · SSH latency ${host.connectivity.latencyMs}ms</div>
 
-    <div class="section-title">RHUI repositories detected on this client</div>
-    <p class="check-explainer">Each block below is one RHUI repo this client is configured to use, checked exactly as yum/dnf would use it.</p>
-    ${repoBlocks}
+    <div class="section-title">RHUI server-side (as seen by this client)</div>
+    <p class="check-explainer">The basics: is the RHUI server itself reachable and does it present a valid certificate? This app has no direct access to RHUI, so these checks run from the client.</p>
+    ${serverBlocks}
+
+    <div class="section-title">Configuration issues found on this client</div>
+    ${renderIssues(host.clientSide.issues, host.hostKey)}
+
+    <div class="section-title">Client entitlement certificate</div>
+    <p class="check-explainer">The certificate this client uses to authenticate to RHUI. This is the one that most often expires and silently breaks updates.</p>
+    ${renderClientCertSummary(repos)}
+
+    <div class="section-title">Subscription Manager status</div>
+    <p class="check-explainer">On an IONOS RHUI-managed host, this should show "Unknown" / not registered — that's correct, not an error.</p>
+    ${renderSubscriptionManager(host.clientSide.subscriptionManager)}
+
+    <div class="section-title">RHUI repositories configured on this client</div>
+    <p class="check-explainer">Every RHUI repo found in this client's own config, whether it's currently enabled, and whether this app could actually fetch its metadata just now.</p>
+    <table>
+      <thead><tr><th>Repo</th><th>Enabled</th><th>Live fetch</th><th>Lag vs public CDN</th></tr></thead>
+      <tbody>${repoRows}</tbody>
+    </table>
 
     <div class="section-title">Live update check (dnf check-update)</div>
-    <p class="check-explainer">The ground-truth test: actually asking dnf to refresh metadata for these RHUI repos, restricted to just them. This is exactly what runs during a real "dnf update".</p>
-    ${renderLiveUpdateCheck(host.liveUpdateCheck)}
+    <p class="check-explainer">The ground-truth test: actually asking dnf to refresh metadata for the primary RHUI repos. This is exactly what runs during a real "dnf update". Debug/source repo variants are skipped here to keep this fast.</p>
+    ${renderLiveUpdateCheck(host.clientSide.liveUpdateCheck)}
   </div>`;
 }
 
@@ -260,6 +337,30 @@ async function init() {
 }
 
 els.refreshBtn.addEventListener('click', () => loadStatus(true));
+
+els.hostCards.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.fix-btn');
+  if (!btn) return;
+  const hostKey = btn.dataset.hostKey;
+  const fixId = btn.dataset.fixId;
+  const repoIds = JSON.parse(btn.dataset.repoIds || '[]');
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = 'Applying fix…';
+  try {
+    const resp = await fetch(`/api/fix/${hostKey}/${fixId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repoIds }),
+    });
+    const result = await resp.json();
+    if (!result.ok) throw new Error(result.error || result.output || 'Fix failed');
+    await loadStatus(true);
+  } catch (err) {
+    btn.textContent = `Failed: ${err.message}`;
+    btn.disabled = false;
+  }
+});
 
 els.setupBtn.addEventListener('click', () => {
   if (pollTimer) clearInterval(pollTimer);

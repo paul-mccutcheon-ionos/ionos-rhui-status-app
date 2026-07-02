@@ -84,6 +84,28 @@ router.post('/config/save', (req, res) => {
   }
 });
 
+router.post('/fix/:hostKey/enable-repos', async (req, res) => {
+  const { hostKey } = req.params;
+  const cfg = config.getConfig();
+  const hostCfg = cfg.hosts[hostKey];
+  if (!hostCfg) {
+    res.status(404).json({ ok: false, error: `Unknown host: ${hostKey}` });
+    return;
+  }
+  const repoIds = Array.isArray(req.body?.repoIds) ? req.body.repoIds : [];
+  if (!repoIds.length) {
+    res.status(400).json({ ok: false, error: 'repoIds is required' });
+    return;
+  }
+  try {
+    const result = await rhuiChecks.enableRepos(hostCfg, repoIds, cfg.sshTimeoutMs);
+    cachedStatus = null;
+    res.json({ ok: result.success, ...result });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 router.get('/status', async (req, res) => {
   if (!config.isConfigured()) {
     res.status(409).json({ error: 'Not configured. Submit configuration via POST /api/config first.' });

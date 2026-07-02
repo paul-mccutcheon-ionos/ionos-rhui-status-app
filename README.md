@@ -4,20 +4,32 @@ A dashboard for IONOS customers to check whether the IONOS-operated RHUI (Red Ha
 delivering updates.
 
 **This app has no direct access to the RHUI servers themselves.** Instead, you point it at one or more RHUI *test
-clients* — ordinary RHEL 8 / RHEL 9 VMs already registered to pull updates from IONOS RHUI. The app SSHes into each
-test client and runs the same checks a real `dnf update` would run, so what you see is exactly what a customer's
-server experiences:
+clients* — ordinary RHEL 8 / RHEL 9 VMs pre-configured by IONOS to pull updates from IONOS RHUI. The app SSHes into
+each test client and runs the same checks a real `dnf update` would run, so what you see is exactly what a
+customer's server experiences. Checks are split into two groups in the UI:
 
-- **RHUI repo discovery** — reads the client's own `/etc/yum.repos.d/*.repo` files to find its actual RHUI config
-- **DNS resolution** — can the client resolve the RHUI server's hostname?
-- **Server certificate** — the TLS certificate the RHUI server presents to the client, and its expiry
-- **Client entitlement certificate** — the certificate the client uses to authenticate to RHUI (the one that most
-  commonly expires and silently breaks updates)
-- **Live metadata fetch** — actually downloads `repodata/repomd.xml` from the RHUI server the same way yum/dnf would
-- **Freshness vs. the public Red Hat CDN** — how far behind the public Red Hat mirrors the RHUI repo is (optional,
-  requires a manual repo mapping since there's no way to derive the public URL from a private RHUI baseurl)
-- **Live update check** — runs `dnf check-update` restricted to the discovered RHUI repos and surfaces the real
-  output, success/failure, and exit code
+**RHUI server-side** (the basics, as observed by the client — deduplicated per unique RHUI hostname, since a client
+typically talks to one RHUI server for all its repos):
+- **DNS resolution** of the RHUI server's hostname
+- **Ping** (informational only — many cloud firewalls block ICMP even when the service is healthy)
+- **Server certificate** validity and expiry
+
+**RHUI client-side configuration** (the client's own setup — usually where real problems live):
+- **RHUI repo discovery** — reads `/etc/yum.repos.d/*.repo`, handling both `baseurl=` and IONOS's `mirrorlist=` repos,
+  with `$releasever`/`$basearch` substitution so URLs are built exactly as dnf builds them
+- **Enabled/disabled state per repo**, with a one-click fix (`dnf config-manager --set-enabled ...`) run over SSH if
+  the app has root or passwordless-sudo access — this directly fixes the most common real-world failure mode
+- **Client entitlement certificate** validity and expiry (the certificate that most commonly expires and silently
+  breaks updates)
+- **Live metadata fetch** — actually downloads `repodata/repomd.xml` (resolving the mirrorlist first, if used) using
+  the client's real certificates
+- **Freshness vs. the public Red Hat CDN** — optional, requires a manual repo mapping since there's no way to derive
+  the public URL from a private RHUI mirrorlist/baseurl
+- **Subscription Manager status** — correctly treats `Overall Status: Unknown` / not-registered as the *expected,
+  correct* state for an IONOS RHUI-managed host, and only flags a problem if the host looks registered directly with
+  Red Hat (risk of double-billing)
+- **Live update check** — runs `dnf check-update` (restricted to primary, non-debug/source repos to stay fast) and
+  surfaces the real output, success/failure, and exit code
 
 Every check is labeled in the UI with a one-line explanation of what it means and why it matters.
 
@@ -40,6 +52,15 @@ Key settings:
 | `RHUI_MONITORED_REPOS` | `repoId|publicRepomdUrl` entries, separated by `;`, for optional public-CDN freshness comparison |
 
 See `.env.example` for the full list and defaults.
+
+### Root / sudo access for remediation and full diagnostics
+
+Some checks and the one-click "enable disabled repos" fix need to run `dnf`, `subscription-manager`, and read
+protected files under `/etc/pki/rhui/`. If the configured SSH user is `root`, commands run directly; otherwise the
+app prefixes them with `sudo -n` (non-interactive), which requires the user to have passwordless sudo configured for
+those commands. Without root/sudo, most checks still work (repo discovery, DNS, ping, server certificate, live
+metadata fetch) but the client certificate check, subscription-manager check, live update check, and repo-enabling
+fix will fail or be skipped.
 
 ## Running
 
