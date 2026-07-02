@@ -24,18 +24,25 @@ function connect(hostCfg, timeoutMs) {
       return;
     }
 
+    let settled = false;
     const conn = new Client();
     const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
       conn.end();
       reject(new Error(`SSH connection to ${hostCfg.host} timed out after ${timeoutMs}ms`));
     }, timeoutMs);
 
     conn
       .on('ready', () => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timer);
         resolve(conn);
       })
       .on('error', (err) => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timer);
         reject(err);
       })
@@ -54,18 +61,33 @@ function exec(conn, command, timeoutMs) {
   return new Promise((resolve, reject) => {
     let stdout = '';
     let stderr = '';
+    let settled = false;
+    let activeStream = null;
+
+    // On timeout the remote command/channel must be actively torn down --
+    // otherwise it (and its data listeners) linger on the connection, and
+    // enough leaked channels/listeners across many checks can eventually
+    // make the whole connection unusable for new commands.
     const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      if (activeStream) activeStream.destroy();
       reject(new Error(`Command timed out after ${timeoutMs}ms: ${command}`));
     }, timeoutMs);
 
     conn.exec(command, (err, stream) => {
+      if (settled) return;
       if (err) {
+        settled = true;
         clearTimeout(timer);
         reject(err);
         return;
       }
+      activeStream = stream;
       stream
         .on('close', (code) => {
+          if (settled) return;
+          settled = true;
           clearTimeout(timer);
           resolve({ code, stdout, stderr });
         })
