@@ -61,11 +61,21 @@ function isPrivateIp(ip) {
   return /^10\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\./.test(ip || '');
 }
 
-// Prefer a public-looking address as the default so SSH is more likely to
-// work out of the box; the field is always editable regardless.
-function pickDefaultIp(ips) {
-  if (!ips || !ips.length) return '';
-  return ips.find((ip) => !isPrivateIp(ip)) || ips[0];
+// Prefer a confirmed-SSH-reachable, public-looking address as the default so
+// SSH is more likely to work out of the box; the field is always editable.
+function pickDefaultIp(ipStatus) {
+  if (!ipStatus || !ipStatus.length) return '';
+  const reachable = ipStatus.filter((s) => s.sshReachable);
+  const pool = reachable.length ? reachable : ipStatus;
+  const pick = pool.find((s) => !isPrivateIp(s.address)) || pool[0];
+  return pick.address;
+}
+
+function renderIpStatusList(ipStatus) {
+  if (!ipStatus || !ipStatus.length) return 'none found';
+  return ipStatus
+    .map((s) => `${escapeHtml(s.address)} ${s.sshReachable ? '✅' : '❌'}`)
+    .join(', ');
 }
 
 function renderDiscoverResults() {
@@ -75,13 +85,12 @@ function renderDiscoverResults() {
   }
   els.discoverResults.innerHTML = discoveredServers
     .map((server, index) => {
-      const ip = pickDefaultIp(server.ips);
-      const allIps = (server.ips || []).join(', ') || 'none found';
+      const ip = pickDefaultIp(server.ipStatus);
       return `<div class="discover-row" data-discover-index="${index}">
         <input type="checkbox" class="discover-checkbox" />
         <div class="discover-row-main">
           <div class="name">${escapeHtml(server.name)} <span class="muted">(${escapeHtml(server.datacenterName)})</span></div>
-          <div class="muted">Image: ${escapeHtml(server.image)} · IONOS-reported IPs: ${escapeHtml(allIps)}</div>
+          <div class="muted">Image: ${escapeHtml(server.image)} · SSH port 22 reachability: ${renderIpStatusList(server.ipStatus)}</div>
           <label>Label <input data-field="label" value="${escapeHtml(server.name)}" /></label>
           <label>SSH connect address — override if this IP is private/NAT'd and unreachable from this app; enter a public IP, NAT gateway address, or FQDN instead
             <input data-field="host" value="${escapeHtml(ip)}" placeholder="10.0.0.10 or nat-gateway.example.com" />
@@ -617,7 +626,7 @@ els.hostsList.addEventListener('click', (e) => {
 });
 
 els.discoverBtn.addEventListener('click', async () => {
-  els.discoverStatus.textContent = 'Searching IONOS Cloud API for RHEL hosts…';
+  els.discoverStatus.textContent = 'Searching IONOS Cloud API for RHEL hosts and checking SSH reachability…';
   els.discoverBtn.disabled = true;
   try {
     const resp = await fetch('/api/ionos/discover', {

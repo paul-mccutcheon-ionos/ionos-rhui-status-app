@@ -1,6 +1,31 @@
 const axios = require('axios');
+const net = require('net');
 
 const BASE = 'https://api.ionos.com/cloudapi/v6';
+const SSH_PROBE_PORT = 22;
+const SSH_PROBE_TIMEOUT_MS = 2500;
+
+// A quick TCP connect to port 22 -- not ICMP ping, which cloud firewalls
+// routinely block regardless of whether SSH itself works. This answers the
+// question that actually matters when picking a connect address: "can this
+// app reach an SSH port here at all?"
+function checkSshPortReachable(host) {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    let settled = false;
+    const finish = (reachable) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolve(reachable);
+    };
+    socket.setTimeout(SSH_PROBE_TIMEOUT_MS);
+    socket.once('connect', () => finish(true));
+    socket.once('timeout', () => finish(false));
+    socket.once('error', () => finish(false));
+    socket.connect(SSH_PROBE_PORT, host);
+  });
+}
 
 function authHeaders(apiToken, contractNumber) {
   const headers = { Authorization: `Bearer ${apiToken}` };
@@ -97,6 +122,16 @@ async function discoverRhelServers({ apiToken, contractNumber }) {
         ips,
       });
     }
+  }
+
+  const uniqueIps = [...new Set(results.flatMap((r) => r.ips))];
+  const reachabilityEntries = await Promise.all(
+    uniqueIps.map(async (ip) => [ip, await checkSshPortReachable(ip)])
+  );
+  const reachabilityMap = new Map(reachabilityEntries);
+
+  for (const server of results) {
+    server.ipStatus = server.ips.map((ip) => ({ address: ip, sshReachable: reachabilityMap.get(ip) }));
   }
 
   return results;
