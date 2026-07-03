@@ -71,15 +71,6 @@ router.post('/config', (req, res) => {
   res.json({ ok: true, configured: config.isConfigured() });
 });
 
-router.post('/config/save', (req, res) => {
-  try {
-    const envPath = config.saveOverridesToEnvFile();
-    res.json({ ok: true, savedTo: envPath });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
 router.post('/ionos/discover', async (req, res) => {
   const body = req.body || {};
   const cfg = config.getConfig();

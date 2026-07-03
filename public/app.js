@@ -1,7 +1,7 @@
 const els = {
-  loading: document.getElementById('loading-view'),
-  setup: document.getElementById('setup-view'),
-  dashboard: document.getElementById('dashboard-view'),
+  loadingPane: document.getElementById('loading-pane'),
+  setupPane: document.getElementById('setup-pane'),
+  statusPane: document.getElementById('status-pane'),
   hostSelectWrap: document.getElementById('host-select-wrap'),
   hostSelect: document.getElementById('host-select'),
   hostHeader: document.getElementById('host-header'),
@@ -10,10 +10,8 @@ const els = {
   navItems: document.querySelectorAll('.nav-item'),
   lastUpdated: document.getElementById('last-updated'),
   refreshBtn: document.getElementById('refresh-btn'),
-  setupBtn: document.getElementById('setup-btn'),
   setupForm: document.getElementById('setup-form'),
   setupStatus: document.getElementById('setup-status'),
-  saveEnvBtn: document.getElementById('save-env-btn'),
   envUpload: document.getElementById('env-upload'),
   versionPill: document.getElementById('version-pill'),
   ionosApiToken: document.getElementById('ionos-api-token'),
@@ -207,11 +205,24 @@ let pollTimer = null;
 let currentHosts = [];
 let selectedHostIndex = 0;
 
-function show(view) {
-  els.loading.classList.add('hidden');
-  els.setup.classList.add('hidden');
-  els.dashboard.classList.add('hidden');
-  view.classList.remove('hidden');
+function showLoading() {
+  els.loadingPane.classList.remove('hidden');
+  els.setupPane.classList.add('hidden');
+  els.statusPane.classList.add('hidden');
+}
+
+// paneName is 'setup', 'server', or 'client'. 'server'/'client' both show the
+// status pane, switching which sub-view (server-side vs client-side) is visible.
+function selectPane(paneName) {
+  els.navItems.forEach((item) => item.classList.toggle('active', item.dataset.pane === paneName));
+  els.loadingPane.classList.add('hidden');
+  const isSetup = paneName === 'setup';
+  els.setupPane.classList.toggle('hidden', !isSetup);
+  els.statusPane.classList.toggle('hidden', isSetup);
+  if (!isSetup) {
+    els.viewServer.classList.toggle('hidden', paneName !== 'server');
+    els.viewClient.classList.toggle('hidden', paneName !== 'client');
+  }
 }
 
 function badge(text, level) {
@@ -446,12 +457,6 @@ function renderDashboard(host) {
   els.viewClient.innerHTML = hasDetail ? renderClientView(host) : '';
 }
 
-function selectView(viewName) {
-  els.navItems.forEach((item) => item.classList.toggle('active', item.dataset.view === viewName));
-  els.viewServer.classList.toggle('hidden', viewName !== 'server');
-  els.viewClient.classList.toggle('hidden', viewName !== 'client');
-}
-
 function renderHostSelect() {
   const multi = currentHosts.length > 1;
   els.hostSelectWrap.classList.toggle('hidden', !multi);
@@ -466,7 +471,8 @@ async function loadStatus(force) {
   try {
     const resp = await fetch(`/api/status${force ? '?refresh=true' : ''}`);
     if (resp.status === 409) {
-      show(els.setup);
+      await loadConfigIntoForm();
+      selectPane('setup');
       return;
     }
     const data = await resp.json();
@@ -475,10 +481,8 @@ async function loadStatus(force) {
     renderHostSelect();
     renderDashboard(currentHosts[selectedHostIndex] || { configured: false, label: 'No hosts configured' });
     els.lastUpdated.textContent = `Updated ${fmtDate(data.generatedAt)}`;
-    show(els.dashboard);
   } catch (err) {
     els.hostHeader.innerHTML = `<p class="error-text">Failed to load status: ${err.message}</p>`;
-    show(els.dashboard);
   }
 }
 
@@ -557,17 +561,18 @@ async function loadConfigIntoForm() {
 }
 
 async function init() {
-  show(els.loading);
+  showLoading();
   loadVersion();
   const statusResp = await fetch('/api/config/status');
   const { configured } = await statusResp.json();
 
   if (configured) {
     await loadStatus(false);
+    selectPane('server');
     pollTimer = setInterval(() => loadStatus(false), 60000);
   } else {
     await loadConfigIntoForm();
-    show(els.setup);
+    selectPane('setup');
   }
 }
 
@@ -579,7 +584,23 @@ els.hostSelect.addEventListener('change', () => {
 });
 
 els.navItems.forEach((item) => {
-  item.addEventListener('click', () => selectView(item.dataset.view));
+  item.addEventListener('click', async () => {
+    const pane = item.dataset.pane;
+    if (pane === 'setup') {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+      await loadConfigIntoForm();
+      selectPane(pane);
+      return;
+    }
+    selectPane(pane);
+    if (!pollTimer && currentHosts.length) {
+      await loadStatus(true);
+      pollTimer = setInterval(() => loadStatus(false), 60000);
+    }
+  });
 });
 
 els.viewClient.addEventListener('click', async (e) => {
@@ -602,12 +623,6 @@ els.viewClient.addEventListener('click', async (e) => {
     btn.textContent = `Failed: ${err.message}`;
     btn.disabled = false;
   }
-});
-
-els.setupBtn.addEventListener('click', async () => {
-  if (pollTimer) clearInterval(pollTimer);
-  await loadConfigIntoForm();
-  show(els.setup);
 });
 
 els.sameKeyToggle.addEventListener('change', toggleSameKeyVisibility);
@@ -670,29 +685,8 @@ els.setupForm.addEventListener('submit', async (e) => {
     els.setupStatus.textContent = 'Configuration applied. Loading status…';
     selectedHostIndex = 0;
     await loadStatus(true);
+    selectPane('server');
     pollTimer = setInterval(() => loadStatus(false), 60000);
-  } catch (err) {
-    els.setupStatus.textContent = `Error: ${err.message}`;
-  }
-});
-
-els.saveEnvBtn.addEventListener('click', async () => {
-  const payload = formToConfigPayload(els.setupForm);
-  if (!hostsAreValid(payload.hosts)) {
-    els.setupStatus.textContent = 'Error: select or add at least one host, each with a host/IP, SSH user, and a key (path or content).';
-    return;
-  }
-  els.setupStatus.textContent = 'Saving to .env…';
-  try {
-    await fetch('/api/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const resp = await fetch('/api/config/save', { method: 'POST' });
-    const result = await resp.json();
-    if (!result.ok) throw new Error(result.error || 'Failed to save');
-    els.setupStatus.textContent = `Saved to ${result.savedTo}`;
   } catch (err) {
     els.setupStatus.textContent = `Error: ${err.message}`;
   }
@@ -701,7 +695,7 @@ els.saveEnvBtn.addEventListener('click', async () => {
 els.envUpload.addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  show(els.setup);
+  selectPane('setup');
   els.setupStatus.textContent = `Applying ${file.name}…`;
   try {
     const text = await file.text();
@@ -716,6 +710,7 @@ els.envUpload.addEventListener('change', async (e) => {
     els.setupStatus.textContent = 'Configuration applied from upload. Loading status…';
     selectedHostIndex = 0;
     await loadStatus(true);
+    selectPane('server');
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = setInterval(() => loadStatus(false), 60000);
   } catch (err) {

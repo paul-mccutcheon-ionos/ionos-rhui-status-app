@@ -1,10 +1,9 @@
-const fs = require('fs');
-const path = require('path');
 require('dotenv').config();
 
 // In-memory overrides collected from the web setup form when no .env value
-// is present. Never written to disk unless the user explicitly requests it
-// via POST /api/config/save.
+// is present. Configuration is never written to disk by this app -- it must
+// be re-supplied (via .env at startup, or the setup form / uploaded .env)
+// each time the process starts, by policy.
 let runtimeOverrides = {};
 
 const FIELDS = [
@@ -107,38 +106,10 @@ function isConfigured() {
   return getConfig().hosts.some(hostIsUsable);
 }
 
-function saveOverridesToEnvFile() {
-  const cfg = getConfig();
-  const lines = [];
-  const push = (k, v) => lines.push(`${k}=${(v ?? '').toString().replace(/\r?\n/g, '\\n')}`);
-  // RHUI_HOSTS_JSON is already newline-safe (JSON.stringify escapes embedded
-  // newlines as literal "\n" within the string) -- do not double-escape it.
-  const pushRaw = (k, v) => lines.push(`${k}=${v ?? ''}`);
-
-  push('PORT', cfg.port);
-  push('SESSION_SECRET', cfg.sessionSecret);
-
-  push('IONOS_API_TOKEN', cfg.ionos.apiToken);
-  push('IONOS_CONTRACT_NUMBER', cfg.ionos.contractNumber);
-
-  pushRaw('RHUI_HOSTS_JSON', JSON.stringify(cfg.hosts));
-
-  push('RHUI_REPO_FILTER', cfg.repoFilter);
-  push('RHUI_MONITORED_REPOS', cfg.monitoredRepos.map((r) => `${r.repoId}|${r.publicRepomdUrl}`).join(';'));
-  push('SSH_TIMEOUT_MS', cfg.sshTimeoutMs);
-  push('CDN_TIMEOUT_MS', cfg.cdnTimeoutMs);
-  push('STATUS_POLL_INTERVAL_SECONDS', cfg.pollIntervalSeconds);
-
-  const envPath = path.join(__dirname, '..', '.env');
-  fs.writeFileSync(envPath, lines.join('\n') + '\n', { mode: 0o600 });
-  return envPath;
-}
-
 module.exports = {
   getConfig,
   setOverrides,
   clearOverrides,
   isConfigured,
-  saveOverridesToEnvFile,
   FIELDS,
 };

@@ -19,7 +19,6 @@
   <div class="topbar-actions">
     <span id="last-updated" class="muted"></span>
     <button id="refresh-btn" class="btn">Refresh</button>
-    <button id="setup-btn" class="btn btn-secondary">Configuration</button>
     <label class="btn btn-secondary file-btn">
       Upload .env
       <input type="file" id="env-upload" accept=".env,text/plain" hidden />
@@ -28,99 +27,105 @@
   </div>
 </header>
 
-<main id="app">
-  <section id="setup-view" class="hidden">
-    <h2>Setup</h2>
-    <div class="intro-box">
-      <p>
-        <strong>What this app checks.</strong> IONOS runs the RHUI (Red Hat Update Infrastructure) servers that
-        supply RHEL updates to your VMs, but this dashboard does not have direct access to that infrastructure.
-        Instead, it uses SSH to log into a <strong>test client</strong> you provide below — a RHEL VM that is
-        already registered to pull updates from IONOS RHUI — and runs the exact same checks a real update would
-        run: reading its repo configuration, resolving and reaching the RHUI server, validating certificates, and
-        attempting a live metadata fetch. The RHEL release is detected automatically once connected — you don't
-        need to specify it. This shows you precisely what a customer's server experiences when it tries to update,
-        and where in that chain a failure is happening.
+<div class="app-shell">
+  <nav class="sidenav">
+    <button type="button" class="nav-item active" data-pane="setup">
+      <span class="nav-icon">🔗</span> RHEL Client Connection
+    </button>
+    <button type="button" class="nav-item" data-pane="server">
+      <span class="nav-icon">🖥️</span> IONOS RHUI Server Status
+    </button>
+    <button type="button" class="nav-item" data-pane="client">
+      <span class="nav-icon">⚡</span> RHEL Client Host Status
+    </button>
+  </nav>
+
+  <main class="content-area">
+    <section id="setup-pane">
+      <h2>RHEL Client Connection</h2>
+      <div class="intro-box">
+        <p>
+          <strong>What this app checks.</strong> IONOS runs the RHUI (Red Hat Update Infrastructure) servers that
+          supply RHEL updates to your VMs, but this dashboard does not have direct access to that infrastructure.
+          Instead, it uses SSH to log into a <strong>test client</strong> you provide below — a RHEL VM that is
+          already registered to pull updates from IONOS RHUI — and runs the exact same checks a real update would
+          run: reading its repo configuration, resolving and reaching the RHUI server, validating certificates, and
+          attempting a live metadata fetch. The RHEL release is detected automatically once connected — you don't
+          need to specify it. This shows you precisely what a customer's server experiences when it tries to update,
+          and where in that chain a failure is happening.
+        </p>
+      </div>
+      <p class="muted">
+        Configuration is kept in server memory only and is never written to disk — upload your .env again if the app
+        restarts or you open it in a new session.
       </p>
-    </div>
-    <p class="muted">
-      Values are kept in server memory for this session unless you click "Save to .env".
-    </p>
-    <form id="setup-form">
-      <fieldset>
-        <legend>IONOS Cloud API (optional — discover RHEL hosts automatically)</legend>
-        <label>API Token <input type="password" id="ionos-api-token" placeholder="IONOS Cloud API bearer token" /></label>
-        <label>Contract Number (optional — only needed for reseller/admin tokens acting on another contract)
-          <input id="ionos-contract-number" placeholder="12345678" />
-        </label>
-        <button type="button" id="discover-btn" class="btn btn-secondary">Discover RHEL hosts</button>
-        <p id="discover-status" class="muted"></p>
-        <div id="discover-results"></div>
-      </fieldset>
-
-      <fieldset>
-        <legend>SSH access</legend>
-        <label class="checkbox-label">
-          <input type="checkbox" id="same-key-toggle" checked /> Use the same SSH user/key for every host
-        </label>
-        <div id="shared-key-fields">
-          <label>SSH User <input id="shared-username" placeholder="cloud-user" /></label>
-          <label>SSH Port <input id="shared-port" type="number" value="22" /></label>
-          <label>SSH Key Path (on server) <input id="shared-keypath" placeholder="/home/app/.ssh/client_key" /></label>
-          <label>-- OR paste SSH Key content --
-            <textarea id="shared-keycontent" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
+      <form id="setup-form">
+        <fieldset>
+          <legend>IONOS Cloud API (optional — discover RHEL hosts automatically)</legend>
+          <label>API Token <input type="password" id="ionos-api-token" placeholder="IONOS Cloud API bearer token" /></label>
+          <label>Contract Number (optional — only needed for reseller/admin tokens acting on another contract)
+            <input id="ionos-contract-number" placeholder="12345678" />
           </label>
-          <label>Key Passphrase (if any) <input id="shared-passphrase" type="password" /></label>
-        </div>
-      </fieldset>
+          <button type="button" id="discover-btn" class="btn btn-secondary">Discover RHEL hosts</button>
+          <p id="discover-status" class="muted"></p>
+          <div id="discover-results"></div>
+        </fieldset>
 
-      <fieldset>
-        <legend>Hosts to monitor</legend>
-        <div id="hosts-list"></div>
-        <button type="button" id="add-host-btn" class="btn btn-secondary">+ Add host manually</button>
-      </fieldset>
-
-      <fieldset>
-        <legend>RHUI detection</legend>
-        <label>Repo filter — used to pick the RHUI entries out of each client's /etc/yum.repos.d (case-insensitive substring match on repo id or URL)
-          <input name="repoFilter" value="rhui" />
-        </label>
-        <label>Public CDN comparison (optional) — repoId|publicRepomdUrl pairs separated by ";". If a discovered repo's id matches one of these, its update freshness is compared against the public Red Hat CDN.
-          <textarea name="monitoredRepos" rows="3" placeholder="rhel-8-for-x86_64-baseos-rhui-rpms|https://cdn.redhat.com/content/dist/rhel8/8/x86_64/baseos/os/repodata/repomd.xml"></textarea>
-        </label>
-      </fieldset>
-
-      <div class="form-actions">
-        <button type="submit" class="btn">Apply configuration</button>
-        <button type="button" id="save-env-btn" class="btn btn-secondary">Save to .env on server</button>
-      </div>
-      <p id="setup-status" class="muted"></p>
-    </form>
-  </section>
-
-  <section id="dashboard-view" class="hidden">
-    <div class="dashboard-layout">
-      <nav class="sidenav">
-        <button type="button" class="nav-item active" data-view="server">IONOS RHUI Server Status</button>
-        <button type="button" class="nav-item" data-view="client">RHEL Client Host Status</button>
-      </nav>
-      <div class="dashboard-content">
-        <div id="host-select-wrap" class="hidden">
-          <label class="host-select-label">Host
-            <select id="host-select"></select>
+        <fieldset>
+          <legend>SSH access</legend>
+          <label class="checkbox-label">
+            <input type="checkbox" id="same-key-toggle" checked /> Use the same SSH user/key for every host
           </label>
-        </div>
-        <div id="host-header"></div>
-        <div id="view-server"></div>
-        <div id="view-client" class="hidden"></div>
-      </div>
-    </div>
-  </section>
+          <div id="shared-key-fields">
+            <label>SSH User <input id="shared-username" placeholder="cloud-user" /></label>
+            <label>SSH Port <input id="shared-port" type="number" value="22" /></label>
+            <label>SSH Key Path (on server) <input id="shared-keypath" placeholder="/home/app/.ssh/client_key" /></label>
+            <label>-- OR paste SSH Key content --
+              <textarea id="shared-keycontent" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
+            </label>
+            <label>Key Passphrase (if any) <input id="shared-passphrase" type="password" /></label>
+          </div>
+        </fieldset>
 
-  <section id="loading-view">
-    <p class="muted">Loading…</p>
-  </section>
-</main>
+        <fieldset>
+          <legend>Hosts to monitor</legend>
+          <div id="hosts-list"></div>
+          <button type="button" id="add-host-btn" class="btn btn-secondary">+ Add host manually</button>
+        </fieldset>
+
+        <fieldset>
+          <legend>RHUI detection</legend>
+          <label>Repo filter — used to pick the RHUI entries out of each client's /etc/yum.repos.d (case-insensitive substring match on repo id or URL)
+            <input name="repoFilter" value="rhui" />
+          </label>
+          <label>Public CDN comparison (optional) — repoId|publicRepomdUrl pairs separated by ";". If a discovered repo's id matches one of these, its update freshness is compared against the public Red Hat CDN.
+            <textarea name="monitoredRepos" rows="3" placeholder="rhel-8-for-x86_64-baseos-rhui-rpms|https://cdn.redhat.com/content/dist/rhel8/8/x86_64/baseos/os/repodata/repomd.xml"></textarea>
+          </label>
+        </fieldset>
+
+        <div class="form-actions">
+          <button type="submit" class="btn">Apply configuration</button>
+        </div>
+        <p id="setup-status" class="muted"></p>
+      </form>
+    </section>
+
+    <section id="status-pane" class="hidden">
+      <div id="host-select-wrap" class="hidden">
+        <label class="host-select-label">Host
+          <select id="host-select"></select>
+        </label>
+      </div>
+      <div id="host-header"></div>
+      <div id="view-server"></div>
+      <div id="view-client" class="hidden"></div>
+    </section>
+
+    <section id="loading-pane">
+      <p class="muted">Loading…</p>
+    </section>
+  </main>
+</div>
 
 <script src="/app.js"></script>
 </body>

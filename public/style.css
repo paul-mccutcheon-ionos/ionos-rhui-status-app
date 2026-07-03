@@ -88,7 +88,13 @@ pre.output-block {
   word-break: break-word;
 }
 
-.topbar-actions { display: flex; align-items: center; gap: 12px; }
+.topbar-actions { display: flex; align-items: center; gap: 10px; }
+
+.topbar-actions .btn, .topbar-actions .file-btn {
+  font-size: 13px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
 
 .file-btn { position: relative; overflow: hidden; }
 
@@ -112,39 +118,36 @@ pre.output-block {
 
 .btn-secondary:hover { background: rgba(255,255,255,0.1); }
 
-main { padding: 24px; max-width: 1200px; margin: 0 auto; }
-
-#dashboard-view { max-width: none; padding: 0; margin: 0; }
-
 .hidden { display: none !important; }
 
 .muted { color: var(--muted); font-size: 13px; }
 
-.dashboard-layout {
+.app-shell {
   display: flex;
-  align-items: flex-start;
-  gap: 24px;
-  padding: 24px;
-  max-width: 1400px;
-  margin: 0 auto;
+  align-items: stretch;
+  min-height: calc(100vh - 56px);
 }
 
 .sidenav {
-  flex: 0 0 240px;
+  flex: 0 0 260px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  position: sticky;
-  top: 24px;
+  gap: 2px;
+  background: var(--card-bg);
+  border-right: 1px solid var(--border);
+  padding: 16px 10px;
 }
 
 .nav-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
   text-align: left;
-  background: white;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  background: transparent;
+  border: none;
+  border-left: 3px solid transparent;
+  border-radius: 0 8px 8px 0;
   padding: 12px 14px;
   font-family: inherit;
   font-size: 14px;
@@ -153,15 +156,22 @@ main { padding: 24px; max-width: 1200px; margin: 0 auto; }
   cursor: pointer;
 }
 
+.nav-icon { font-size: 16px; }
+
 .nav-item:hover { background: #eaf1fb; }
 
 .nav-item.active {
-  background: var(--ionos-blue);
-  border-color: var(--ionos-blue);
-  color: white;
+  background: #eaf1fb;
+  border-left-color: var(--ionos-blue);
+  color: var(--ionos-blue);
 }
 
-.dashboard-content { flex: 1 1 auto; min-width: 0; }
+.content-area {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 24px;
+  max-width: 1200px;
+}
 
 .host-cards {
   display: grid;
@@ -247,7 +257,7 @@ input, textarea {
 .form-actions .btn { background: var(--ionos-blue); color: white; }
 .form-actions .btn-secondary { background: white; color: var(--ionos-blue); border: 1px solid var(--ionos-blue); }
 
-#setup-view .btn { background: var(--ionos-blue); color: white; }
+#setup-pane .btn { background: var(--ionos-blue); color: white; }
 
 .error-text { color: var(--bad); font-size: 13px; }
 
@@ -296,7 +306,7 @@ input, textarea {
 .host-select-label select { width: auto; min-width: 260px; margin-top: 0; }
 
 @media (max-width: 760px) {
-  .dashboard-layout { flex-direction: column; }
-  .sidenav { flex-direction: row; flex-basis: auto; position: static; width: 100%; }
-  .nav-item { flex: 1; text-align: center; }
+  .app-shell { flex-direction: column; }
+  .sidenav { flex-direction: row; flex-basis: auto; border-right: none; border-bottom: 1px solid var(--border); width: 100%; overflow-x: auto; }
+  .nav-item { flex: 1; justify-content: center; white-space: nowrap; }
 }
