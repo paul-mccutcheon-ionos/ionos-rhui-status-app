@@ -2,7 +2,10 @@ const els = {
   loading: document.getElementById('loading-view'),
   setup: document.getElementById('setup-view'),
   dashboard: document.getElementById('dashboard-view'),
-  hostCards: document.getElementById('host-cards'),
+  hostHeader: document.getElementById('host-header'),
+  viewServer: document.getElementById('view-server'),
+  viewClient: document.getElementById('view-client'),
+  navItems: document.querySelectorAll('.nav-item'),
   lastUpdated: document.getElementById('last-updated'),
   refreshBtn: document.getElementById('refresh-btn'),
   setupBtn: document.getElementById('setup-btn'),
@@ -203,7 +206,7 @@ function renderLiveUpdateCheck(check) {
   </div>`;
 }
 
-function renderHostCard(host) {
+function renderHostHeader(host) {
   if (!host.configured) {
     return `<div class="card">
       <h2>${host.label} ${badge('Not configured', 'muted')}</h2>
@@ -231,28 +234,32 @@ function renderHostCard(host) {
     </div>`;
   }
 
-  const repos = host.clientSide && host.clientSide.repos;
-  if (!repos || !repos.length) {
-    return `<div class="card">
-      <h2>${host.label} ${statusBadge}</h2>
-      <div class="subtitle">${host.host} · ${host.osRelease || ''}</div>
-      <p class="muted">No RHUI repos were found in /etc/yum.repos.d matching the configured filter. Check the "Repo filter" setting or verify this client is actually registered with RHUI.</p>
-    </div>`;
-  }
-
-  const servers = (host.serverSide && host.serverSide.servers) || [];
-  const serverBlocks = servers.map(renderServerBlock).join('');
-
-  const repoRows = repos.map(renderRepoRow).join('');
-
   return `<div class="card">
     <h2>${host.label} ${statusBadge}</h2>
     <div class="subtitle">${host.host} · ${host.osRelease || ''} · SSH latency ${host.connectivity.latencyMs}ms</div>
+  </div>`;
+}
 
-    <div class="section-title">RHUI server-side (as seen by this client)</div>
+function renderServerView(host) {
+  const servers = (host.serverSide && host.serverSide.servers) || [];
+  if (!servers.length) {
+    return '<p class="muted">No RHUI server-side data available yet.</p>';
+  }
+  return `
     <p class="check-explainer">The basics: is the RHUI server itself reachable and does it present a valid certificate? This app has no direct access to RHUI, so these checks run from the client.</p>
-    ${serverBlocks}
+    ${servers.map(renderServerBlock).join('')}
+  `;
+}
 
+function renderClientView(host) {
+  const repos = host.clientSide && host.clientSide.repos;
+  if (!repos || !repos.length) {
+    return '<p class="muted">No RHUI repos were found in /etc/yum.repos.d matching the configured filter. Check the "Repo filter" setting or verify this client is actually registered with RHUI.</p>';
+  }
+
+  const repoRows = repos.map(renderRepoRow).join('');
+
+  return `
     <div class="section-title">Configuration issues found on this client</div>
     ${renderIssues(host.clientSide.issues)}
 
@@ -274,7 +281,21 @@ function renderHostCard(host) {
     <div class="section-title">Live update check (dnf check-update)</div>
     <p class="check-explainer">The ground-truth test: actually asking dnf to refresh metadata for the primary RHUI repos. This is exactly what runs during a real "dnf update". Debug/source repo variants are skipped here to keep this fast.</p>
     ${renderLiveUpdateCheck(host.clientSide.liveUpdateCheck)}
-  </div>`;
+  `;
+}
+
+function renderDashboard(host) {
+  els.hostHeader.innerHTML = renderHostHeader(host);
+
+  const hasDetail = host.configured && host.connectivity && host.connectivity.reachable && !host.error;
+  els.viewServer.innerHTML = hasDetail ? renderServerView(host) : '';
+  els.viewClient.innerHTML = hasDetail ? renderClientView(host) : '';
+}
+
+function selectView(viewName) {
+  els.navItems.forEach((item) => item.classList.toggle('active', item.dataset.view === viewName));
+  els.viewServer.classList.toggle('hidden', viewName !== 'server');
+  els.viewClient.classList.toggle('hidden', viewName !== 'client');
 }
 
 async function loadStatus(force) {
@@ -285,11 +306,11 @@ async function loadStatus(force) {
       return;
     }
     const data = await resp.json();
-    els.hostCards.innerHTML = renderHostCard(data.host);
+    renderDashboard(data.host);
     els.lastUpdated.textContent = `Updated ${fmtDate(data.generatedAt)}`;
     show(els.dashboard);
   } catch (err) {
-    els.hostCards.innerHTML = `<p class="error-text">Failed to load status: ${err.message}</p>`;
+    els.hostHeader.innerHTML = `<p class="error-text">Failed to load status: ${err.message}</p>`;
     show(els.dashboard);
   }
 }
@@ -334,7 +355,11 @@ async function init() {
 
 els.refreshBtn.addEventListener('click', () => loadStatus(true));
 
-els.hostCards.addEventListener('click', async (e) => {
+els.navItems.forEach((item) => {
+  item.addEventListener('click', () => selectView(item.dataset.view));
+});
+
+els.viewClient.addEventListener('click', async (e) => {
   const btn = e.target.closest('.fix-btn');
   if (!btn) return;
   const fixId = btn.dataset.fixId;

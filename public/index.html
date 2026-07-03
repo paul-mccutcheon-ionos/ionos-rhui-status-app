@@ -79,7 +79,17 @@
   </section>
 
   <section id="dashboard-view" class="hidden">
-    <div id="host-cards" class="host-cards"></div>
+    <div class="dashboard-layout">
+      <nav class="sidenav">
+        <button type="button" class="nav-item active" data-view="server">IONOS RHUI Server Status</button>
+        <button type="button" class="nav-item" data-view="client">RHEL Client Host Status</button>
+      </nav>
+      <div class="dashboard-content">
+        <div id="host-header"></div>
+        <div id="view-server"></div>
+        <div id="view-client" class="hidden"></div>
+      </div>
+    </div>
   </section>
 
   <section id="loading-view">

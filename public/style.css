@@ -114,15 +114,62 @@ pre.output-block {
 
 main { padding: 24px; max-width: 1200px; margin: 0 auto; }
 
+#dashboard-view { max-width: none; padding: 0; margin: 0; }
+
 .hidden { display: none !important; }
 
 .muted { color: var(--muted); font-size: 13px; }
+
+.dashboard-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.sidenav {
+  flex: 0 0 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: sticky;
+  top: 24px;
+}
+
+.nav-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.nav-item:hover { background: #eaf1fb; }
+
+.nav-item.active {
+  background: var(--ionos-blue);
+  border-color: var(--ionos-blue);
+  color: white;
+}
+
+.dashboard-content { flex: 1 1 auto; min-width: 0; }
 
 .host-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
   gap: 20px;
 }
+
+#host-header .card { margin-bottom: 20px; }
 
 .card {
   background: var(--card-bg);
@@ -157,12 +204,15 @@ main { padding: 24px; max-width: 1200px; margin: 0 auto; }
 .badge-muted { background: #eceff3; color: var(--muted); }
 
 .section-title {
-  font-size: 12px;
+  font-size: 18px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-  margin: 16px 0 6px;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  margin: 24px 0 8px;
 }
+
+.section-title:first-child { margin-top: 0; }
 
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 table td, table th { padding: 4px 6px; text-align: left; border-bottom: 1px solid var(--border); }
@@ -200,3 +250,9 @@ input, textarea {
 #setup-view .btn { background: var(--ionos-blue); color: white; }
 
 .error-text { color: var(--bad); font-size: 13px; }
+
+@media (max-width: 760px) {
+  .dashboard-layout { flex-direction: column; }
+  .sidenav { flex-direction: row; flex-basis: auto; position: static; width: 100%; }
+  .nav-item { flex: 1; text-align: center; }
+}
