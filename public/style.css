@@ -251,6 +251,50 @@ input, textarea {
 
 .error-text { color: var(--bad); font-size: 13px; }
 
+.checkbox-label { display: flex; align-items: center; gap: 8px; }
+.checkbox-label input { width: auto; margin-top: 0; }
+
+.discover-row, .host-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+
+.discover-row input[type="checkbox"], .host-row input[type="checkbox"] {
+  width: auto;
+  margin-top: 4px;
+}
+
+.discover-row-main, .host-row-main { flex: 1 1 auto; min-width: 0; }
+
+.discover-row-main .name { font-weight: 600; }
+
+.host-row-remove {
+  background: transparent;
+  border: none;
+  color: var(--bad);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 4px 8px;
+}
+
+.per-host-keys {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.per-host-keys label { margin-bottom: 0; }
+
+#host-select-wrap { margin-bottom: 16px; }
+.host-select-label { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+.host-select-label select { width: auto; min-width: 260px; margin-top: 0; }
+
 @media (max-width: 760px) {
   .dashboard-layout { flex-direction: column; }
   .sidenav { flex-direction: row; flex-basis: auto; position: static; width: 100%; }

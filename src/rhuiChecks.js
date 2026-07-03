@@ -503,8 +503,11 @@ async function checkHost(hostCfg, cfg) {
 }
 
 async function checkAll(cfg) {
-  const host = await checkHost(cfg.host, cfg);
-  return { generatedAt: new Date(), host };
+  // Each host gets its own SSH connection, so checking multiple hosts in
+  // parallel is safe (the earlier MaxSessions issue was about concurrent
+  // channels on a single connection, not concurrent connections).
+  const hosts = await Promise.all(cfg.hosts.map((hostCfg) => checkHost(hostCfg, cfg)));
+  return { generatedAt: new Date(), hosts };
 }
 
 // Remediation: enable RHUI repos that are currently disabled in the client's

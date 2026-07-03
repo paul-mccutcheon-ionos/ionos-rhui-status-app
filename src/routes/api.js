@@ -1,6 +1,7 @@
 const express = require('express');
 const config = require('../config');
 const rhuiChecks = require('../rhuiChecks');
+const ionosCloud = require('../ionosCloud');
 const packageJson = require('../../package.json');
 
 const router = express.Router();
@@ -34,17 +35,15 @@ router.get('/config/status', (req, res) => {
 
 router.get('/config', (req, res) => {
   const cfg = config.getConfig();
-  const h = cfg.host;
+  // This is a single-admin internal tool with no auth layer of its own, so
+  // secrets are returned in full to let the setup form pre-populate exactly
+  // as entered (matching how it already handles pasted SSH keys).
   res.json({
-    host: {
-      label: h.label,
-      host: h.host,
-      port: h.port,
-      username: h.username,
-      keyPath: h.keyPath,
-      hasKeyContent: Boolean(h.keyContent),
-      hasPassphrase: Boolean(h.passphrase),
+    ionos: {
+      apiToken: cfg.ionos.apiToken,
+      contractNumber: cfg.ionos.contractNumber,
     },
+    hosts: cfg.hosts,
     repoFilter: cfg.repoFilter,
     monitoredRepos: cfg.monitoredRepos,
     pollIntervalSeconds: cfg.pollIntervalSeconds,
@@ -54,15 +53,15 @@ router.get('/config', (req, res) => {
 router.post('/config', (req, res) => {
   const body = req.body || {};
   const overrides = {};
-  const h = body.host || {};
 
-  if (h.label !== undefined) overrides.HOST_LABEL = h.label;
-  if (h.host !== undefined) overrides.HOST_HOST = h.host;
-  if (h.port !== undefined) overrides.HOST_SSH_PORT = String(h.port);
-  if (h.username !== undefined) overrides.HOST_SSH_USER = h.username;
-  if (h.keyPath !== undefined) overrides.HOST_SSH_KEY_PATH = h.keyPath;
-  if (h.keyContent !== undefined) overrides.HOST_SSH_KEY_CONTENT = h.keyContent;
-  if (h.passphrase !== undefined) overrides.HOST_SSH_PASSPHRASE = h.passphrase;
+  if (body.ionos) {
+    if (body.ionos.apiToken !== undefined) overrides.IONOS_API_TOKEN = body.ionos.apiToken;
+    if (body.ionos.contractNumber !== undefined) overrides.IONOS_CONTRACT_NUMBER = body.ionos.contractNumber;
+  }
+
+  if (Array.isArray(body.hosts)) {
+    overrides.RHUI_HOSTS_JSON = JSON.stringify(body.hosts);
+  }
 
   if (body.repoFilter !== undefined) overrides.RHUI_REPO_FILTER = body.repoFilter;
   if (body.monitoredRepos !== undefined) overrides.RHUI_MONITORED_REPOS = body.monitoredRepos;
@@ -81,9 +80,36 @@ router.post('/config/save', (req, res) => {
   }
 });
 
-router.post('/fix/enable-repos', async (req, res) => {
+router.post('/ionos/discover', async (req, res) => {
+  const body = req.body || {};
   const cfg = config.getConfig();
-  const hostCfg = cfg.host;
+  const apiToken = body.apiToken || cfg.ionos.apiToken;
+  const contractNumber = body.contractNumber !== undefined ? body.contractNumber : cfg.ionos.contractNumber;
+
+  if (!apiToken) {
+    res.status(400).json({ ok: false, error: 'IONOS Cloud API token is required' });
+    return;
+  }
+
+  try {
+    const servers = await ionosCloud.discoverRhelServers({ apiToken, contractNumber });
+    res.json({ ok: true, servers });
+  } catch (err) {
+    const message = err.response
+      ? `IONOS API error ${err.response.status}: ${JSON.stringify(err.response.data)}`
+      : err.message;
+    res.status(502).json({ ok: false, error: message });
+  }
+});
+
+router.post('/fix/:hostIndex/enable-repos', async (req, res) => {
+  const cfg = config.getConfig();
+  const hostIndex = parseInt(req.params.hostIndex, 10);
+  const hostCfg = cfg.hosts[hostIndex];
+  if (!hostCfg) {
+    res.status(404).json({ ok: false, error: `Unknown host index: ${req.params.hostIndex}` });
+    return;
+  }
   const repoIds = Array.isArray(req.body?.repoIds) ? req.body.repoIds : [];
   if (!repoIds.length) {
     res.status(400).json({ ok: false, error: 'repoIds is required' });

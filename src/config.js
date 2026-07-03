@@ -10,8 +10,8 @@ let runtimeOverrides = {};
 const FIELDS = [
   'PORT',
   'SESSION_SECRET',
-  'HOST_LABEL', 'HOST_HOST', 'HOST_SSH_PORT', 'HOST_SSH_USER',
-  'HOST_SSH_KEY_PATH', 'HOST_SSH_KEY_CONTENT', 'HOST_SSH_PASSPHRASE',
+  'IONOS_API_TOKEN', 'IONOS_CONTRACT_NUMBER',
+  'RHUI_HOSTS_JSON',
   'RHUI_REPO_FILTER', 'RHUI_MONITORED_REPOS', 'SSH_TIMEOUT_MS', 'CDN_TIMEOUT_MS',
   'STATUS_POLL_INTERVAL_SECONDS',
 ];
@@ -35,18 +35,32 @@ function clearOverrides() {
   runtimeOverrides = {};
 }
 
-// The RHEL release (8/9/etc.) isn't asked for -- it's detected live from the
-// client itself (/etc/redhat-release) once connected.
-function parseHostConfig() {
+function normalizeHost(h, index) {
   return {
-    label: get('HOST_LABEL') || 'Test client',
-    host: get('HOST_HOST') || '',
-    port: parseInt(get('HOST_SSH_PORT') || '22', 10),
-    username: get('HOST_SSH_USER') || '',
-    keyPath: get('HOST_SSH_KEY_PATH') || '',
-    keyContent: get('HOST_SSH_KEY_CONTENT') || '',
-    passphrase: get('HOST_SSH_PASSPHRASE') || '',
+    label: h.label || h.host || `Host ${index + 1}`,
+    host: h.host || '',
+    port: parseInt(h.port || '22', 10),
+    username: h.username || '',
+    keyPath: h.keyPath || '',
+    keyContent: h.keyContent || '',
+    passphrase: h.passphrase || '',
   };
+}
+
+// Hosts are stored as a single JSON array (RHUI_HOSTS_JSON) rather than
+// numbered env vars, since the list can grow to any size via IONOS Cloud API
+// discovery. JSON.stringify/.parse already escape/restore embedded newlines
+// in pasted key content, so no manual escaping is needed here.
+function parseHosts() {
+  const raw = get('RHUI_HOSTS_JSON');
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr.map(normalizeHost);
+  } catch (err) {
+    return [];
+  }
 }
 
 // Optional manual mapping used to compare a discovered RHUI repo's metadata
@@ -70,7 +84,11 @@ function getConfig() {
   return {
     port: parseInt(get('PORT') || '3000', 10),
     sessionSecret: get('SESSION_SECRET') || 'dev-secret-change-me',
-    host: parseHostConfig(),
+    ionos: {
+      apiToken: get('IONOS_API_TOKEN') || '',
+      contractNumber: get('IONOS_CONTRACT_NUMBER') || '',
+    },
+    hosts: parseHosts(),
     // Substring match (case-insensitive) against repo id/baseurl used to pick
     // out the RHUI repos from everything in /etc/yum.repos.d on the client.
     repoFilter: get('RHUI_REPO_FILTER') || 'rhui',
@@ -81,26 +99,29 @@ function getConfig() {
   };
 }
 
-function isConfigured() {
-  const h = getConfig().host;
+function hostIsUsable(h) {
   return Boolean(h.host && h.username && (h.keyPath || h.keyContent));
+}
+
+function isConfigured() {
+  return getConfig().hosts.some(hostIsUsable);
 }
 
 function saveOverridesToEnvFile() {
   const cfg = getConfig();
   const lines = [];
   const push = (k, v) => lines.push(`${k}=${(v ?? '').toString().replace(/\r?\n/g, '\\n')}`);
+  // RHUI_HOSTS_JSON is already newline-safe (JSON.stringify escapes embedded
+  // newlines as literal "\n" within the string) -- do not double-escape it.
+  const pushRaw = (k, v) => lines.push(`${k}=${v ?? ''}`);
 
   push('PORT', cfg.port);
   push('SESSION_SECRET', cfg.sessionSecret);
 
-  push('HOST_LABEL', cfg.host.label);
-  push('HOST_HOST', cfg.host.host);
-  push('HOST_SSH_PORT', cfg.host.port);
-  push('HOST_SSH_USER', cfg.host.username);
-  push('HOST_SSH_KEY_PATH', cfg.host.keyPath);
-  push('HOST_SSH_KEY_CONTENT', cfg.host.keyContent);
-  push('HOST_SSH_PASSPHRASE', cfg.host.passphrase);
+  push('IONOS_API_TOKEN', cfg.ionos.apiToken);
+  push('IONOS_CONTRACT_NUMBER', cfg.ionos.contractNumber);
+
+  pushRaw('RHUI_HOSTS_JSON', JSON.stringify(cfg.hosts));
 
   push('RHUI_REPO_FILTER', cfg.repoFilter);
   push('RHUI_MONITORED_REPOS', cfg.monitoredRepos.map((r) => `${r.repoId}|${r.publicRepomdUrl}`).join(';'));

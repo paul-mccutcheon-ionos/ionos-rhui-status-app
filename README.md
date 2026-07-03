@@ -3,11 +3,13 @@
 A dashboard for IONOS customers to check whether the IONOS-operated RHUI (Red Hat Update Infrastructure) is actually
 delivering updates.
 
-**This app has no direct access to the RHUI servers themselves.** Instead, you point it at a single RHUI *test
-client* — an ordinary RHEL VM pre-configured by IONOS to pull updates from IONOS RHUI (any RHEL release; the app
-detects it automatically once connected). The app SSHes into the test client and runs the same checks a real
-`dnf update` would run, so what you see is exactly what a customer's server experiences. Checks are split into two
-groups in the UI:
+**This app has no direct access to the RHUI servers themselves.** Instead, you point it at one or more RHUI *test
+clients* — ordinary RHEL VMs pre-configured by IONOS to pull updates from IONOS RHUI (any RHEL release; the app
+detects it automatically once connected). Test clients can be found automatically via the **IONOS Cloud API** (search
+your VM inventory by contract, detect RHEL hosts by volume `licenceType`, then pick one/many/all) or entered manually.
+The app SSHes into each test client and runs the same checks a real `dnf update` would run, so what you see is
+exactly what a customer's server experiences. A host selector appears in the dashboard when more than one host is
+configured. Checks are split into two groups in the UI:
 
 **RHUI server-side** (the basics, as observed by the client — deduplicated per unique RHUI hostname, since a client
 typically talks to one RHUI server for all its repos):
@@ -38,20 +40,36 @@ Every check is labeled in the UI with a one-line explanation of what it means an
 
 Copy `.env.example` to `.env` and fill in your test client details, or leave `.env` absent and use the in-app
 **Configuration** form (top-right banner: **Upload .env** to load a file directly, or fill in the form manually).
-Form-submitted values live in server memory only, unless you click **Save to .env**.
+Form-submitted values live in server memory only, unless you click **Save to .env**. Opening the form pre-populates
+every field (including SSH keys and the IONOS API token) from whatever is already configured.
 
-Key settings:
+### Finding hosts via the IONOS Cloud API
+
+Enter an IONOS Cloud API token (and, for reseller/admin tokens acting on another contract, a contract number — sent
+as `X-Contract-Number`) and click **Discover RHEL hosts**. This searches every datacenter visible to the token for
+servers whose boot volume `licenceType` is `RHEL` (the same field IONOS sets internally based on the image/snapshot
+used at creation — reliable even for private images that don't resolve via the public image catalog), falling back
+to image alias/name matching. Check the ones you want to monitor, or add hosts manually below — both feed the same
+"Hosts to monitor" list.
+
+### SSH access: one key for everyone, or one per host
+
+Toggle **"Use the same SSH user/key for every host"** to apply one set of credentials to every selected/added host,
+or untick it to give each host its own user/port/key/passphrase (useful when discovered hosts don't all use the same
+key). Either way, `Host / IP` is editable per host in case the discovered IP isn't the one you want to use.
+
+Key settings (`.env`):
 
 | Variable | Purpose |
 |---|---|
-| `HOST_HOST` | Private IP or hostname of the RHUI test client (not the RHUI server) |
-| `HOST_SSH_USER` | SSH login user on the test client |
-| `HOST_SSH_KEY_PATH` | Path to a private key file on the app server (recommended) |
-| `HOST_SSH_KEY_CONTENT` | Alternative to the path: paste the PEM key content |
-| `RHUI_REPO_FILTER` | Substring match used to pick RHUI repos out of the client's configured repos (default `rhui`) |
+| `IONOS_API_TOKEN` | IONOS Cloud API bearer token, used for host discovery |
+| `IONOS_CONTRACT_NUMBER` | Optional, for reseller/admin tokens acting on another contract |
+| `RHUI_HOSTS_JSON` | JSON array of hosts to monitor (label/host/port/username/keyPath/keyContent/passphrase each) |
+| `RHUI_REPO_FILTER` | Substring match used to pick RHUI repos out of each client's configured repos (default `rhui`) |
 | `RHUI_MONITORED_REPOS` | `repoId|publicRepomdUrl` entries, separated by `;`, for optional public-CDN freshness comparison |
 
-See `.env.example` for the full list and defaults.
+See `.env.example` for the full list, defaults, and the `RHUI_HOSTS_JSON` shape. In practice it's easiest to build
+this via the setup form (discovery or manual entry) and click **Save to .env** rather than hand-editing the JSON.
 
 ### Root / sudo access for remediation and full diagnostics
 
