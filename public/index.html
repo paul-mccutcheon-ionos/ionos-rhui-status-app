@@ -77,13 +77,18 @@
             <input type="checkbox" id="same-key-toggle" checked /> Use the same SSH user/key for every host
           </label>
           <div id="shared-key-fields">
-            <label>SSH User <input id="shared-username" placeholder="cloud-user" /></label>
+            <label>SSH User <input id="shared-username" placeholder="cloud-user" autocomplete="off" /></label>
             <label>SSH Port <input id="shared-port" type="number" value="22" /></label>
-            <label>SSH Key Path (on server) <input id="shared-keypath" placeholder="/home/app/.ssh/client_key" /></label>
-            <label>-- OR paste SSH Key content --
-              <textarea id="shared-keycontent" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
+            <label>SSH Key Path — a path on the app server's own filesystem, NOT your computer
+              <input id="shared-keypath" placeholder="/home/app/.ssh/client_key" autocomplete="off" />
             </label>
-            <label>Key Passphrase (if any) <input id="shared-passphrase" type="password" /></label>
+            <label>-- OR choose a private key file from your computer --
+              <input type="file" id="shared-keyfile" accept=".pem,.key,.txt,text/plain" />
+            </label>
+            <label>-- OR paste SSH Key content --
+              <textarea id="shared-keycontent" rows="4" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" autocomplete="off"></textarea>
+            </label>
+            <label>Key Passphrase (if any) <input id="shared-passphrase" type="password" autocomplete="off" /></label>
           </div>
         </fieldset>
 

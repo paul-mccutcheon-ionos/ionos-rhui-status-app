@@ -47,11 +47,16 @@ function sameKeyEnabled() {
 function renderPerHostKeyFields(values = {}) {
   const hiddenClass = sameKeyEnabled() ? 'hidden' : '';
   return `<div class="per-host-keys ${hiddenClass}">
-    <label>SSH User <input data-field="username" value="${escapeHtml(values.username)}" placeholder="cloud-user" /></label>
+    <label>SSH User <input data-field="username" value="${escapeHtml(values.username)}" placeholder="cloud-user" autocomplete="off" /></label>
     <label>SSH Port <input data-field="port" type="number" value="${escapeHtml(values.port || 22)}" /></label>
-    <label>SSH Key Path <input data-field="keyPath" value="${escapeHtml(values.keyPath)}" /></label>
-    <label>SSH Key Content <textarea data-field="keyContent" rows="2" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----">${escapeHtml(values.keyContent)}</textarea></label>
-    <label>Passphrase <input data-field="passphrase" type="password" value="${escapeHtml(values.passphrase)}" /></label>
+    <label>SSH Key Path — on the app server's filesystem, NOT your computer
+      <input data-field="keyPath" value="${escapeHtml(values.keyPath)}" autocomplete="off" />
+    </label>
+    <label>-- OR choose a private key file from your computer --
+      <input type="file" data-field="keyfile" accept=".pem,.key,.txt,text/plain" />
+    </label>
+    <label>SSH Key Content <textarea data-field="keyContent" rows="2" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" autocomplete="off">${escapeHtml(values.keyContent)}</textarea></label>
+    <label>Passphrase <input data-field="passphrase" type="password" value="${escapeHtml(values.passphrase)}" autocomplete="off" /></label>
   </div>`;
 }
 
@@ -634,6 +639,25 @@ els.viewClient.addEventListener('click', async (e) => {
 });
 
 els.sameKeyToggle.addEventListener('change', toggleSameKeyVisibility);
+
+document.getElementById('shared-keyfile').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById('shared-keycontent').value = await file.text();
+  e.target.value = '';
+});
+
+// Delegated so it covers both discovered and manually-added host rows,
+// which are rendered dynamically.
+els.setupForm.addEventListener('change', async (e) => {
+  if (!e.target.matches('[data-field="keyfile"]')) return;
+  const file = e.target.files[0];
+  if (!file) return;
+  const row = e.target.closest('.discover-row, .host-row');
+  const contentField = row && row.querySelector('[data-field="keyContent"]');
+  if (contentField) contentField.value = await file.text();
+  e.target.value = '';
+});
 
 els.addHostBtn.addEventListener('click', () => {
   manualHosts.push({ label: '', host: '', username: '', port: 22, keyPath: '', keyContent: '', passphrase: '' });
