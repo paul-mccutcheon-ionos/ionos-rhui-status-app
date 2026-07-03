@@ -49,11 +49,22 @@ function hostDefaults() {
   };
 }
 
+// Users naturally type "host:port" into a single address field (it's a
+// common enough convention, e.g. NAT/load-balancer endpoints like
+// "77.68.66.159:222"). Without this, that whole string gets passed to
+// getaddrinfo as a hostname and fails to resolve. Only splits on a single
+// trailing ":<digits>" so IPv6 literals (multiple colons) are left alone.
+function splitHostPort(rawHost) {
+  const match = /^([^\s:]+):(\d+)$/.exec((rawHost || '').trim());
+  return match ? { host: match[1], port: match[2] } : { host: (rawHost || '').trim(), port: null };
+}
+
 function normalizeHost(h, index, defaults) {
+  const { host, port: embeddedPort } = splitHostPort(h.host);
   return {
     label: h.label || h.host || `Host ${index + 1}`,
-    host: h.host || '',
-    port: parseInt(h.port || defaults.port || '22', 10),
+    host,
+    port: parseInt(embeddedPort || h.port || defaults.port || '22', 10),
     username: h.username || defaults.username || '',
     keyPath: h.keyPath || defaults.keyPath || '',
     keyContent: h.keyContent || defaults.keyContent || '',

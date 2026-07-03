@@ -95,8 +95,8 @@ function renderDiscoverResults() {
           <div class="name">${escapeHtml(server.name)} <span class="muted">(${escapeHtml(server.datacenterName)})</span></div>
           <div class="muted">Image: ${escapeHtml(server.image)} · SSH port 22 reachability: ${renderIpStatusList(server.ipStatus)}</div>
           <label>Label <input data-field="label" value="${escapeHtml(server.name)}" /></label>
-          <label>SSH connect address — override if this IP is private/NAT'd and unreachable from this app; enter a public IP, NAT gateway address, or FQDN instead
-            <input data-field="host" value="${escapeHtml(ip)}" placeholder="10.0.0.10 or nat-gateway.example.com" />
+          <label>SSH connect address — override if this IP is private/NAT'd and unreachable from this app; enter a public IP, NAT gateway address, or FQDN instead (a ":port" suffix is fine here too, e.g. an NLB endpoint)
+            <input data-field="host" value="${escapeHtml(ip)}" placeholder="10.0.0.10 or nat-gateway.example.com:2222" />
           </label>
           ${renderPerHostKeyFields()}
         </div>
@@ -115,8 +115,8 @@ function renderHostsList() {
       (host, index) => `<div class="host-row" data-host-index="${index}">
         <div class="host-row-main">
           <label>Label <input data-field="label" value="${escapeHtml(host.label)}" placeholder="Test client" /></label>
-          <label>SSH connect address — public IP, NAT gateway address, or FQDN if the host is behind NAT/private networking
-            <input data-field="host" value="${escapeHtml(host.host)}" placeholder="10.0.0.10 or nat-gateway.example.com" />
+          <label>SSH connect address — public IP, NAT gateway address, or FQDN if the host is behind NAT/private networking (a ":port" suffix is fine here too, e.g. an NLB endpoint)
+            <input data-field="host" value="${escapeHtml(host.host)}" placeholder="10.0.0.10 or nat-gateway.example.com:2222" />
           </label>
           ${renderPerHostKeyFields(host)}
         </div>
