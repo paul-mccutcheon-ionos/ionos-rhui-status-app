@@ -11,6 +11,7 @@ const FIELDS = [
   'SESSION_SECRET',
   'IONOS_API_TOKEN', 'IONOS_CONTRACT_NUMBER',
   'RHUI_HOSTS_JSON',
+  'HOST_SSH_USER', 'HOST_SSH_PORT', 'HOST_SSH_KEY_PATH', 'HOST_SSH_KEY_CONTENT', 'HOST_SSH_PASSPHRASE',
   'RHUI_REPO_FILTER', 'RHUI_MONITORED_REPOS', 'SSH_TIMEOUT_MS', 'CDN_TIMEOUT_MS',
   'STATUS_POLL_INTERVAL_SECONDS',
 ];
@@ -34,15 +35,29 @@ function clearOverrides() {
   runtimeOverrides = {};
 }
 
-function normalizeHost(h, index) {
+// Fallback SSH credentials applied to any host in RHUI_HOSTS_JSON that
+// doesn't specify its own -- lets a hand-authored .env list hosts with just
+// host/label and set one shared key/user via plain env vars, instead of
+// embedding key content inside the JSON for every entry.
+function hostDefaults() {
+  return {
+    username: get('HOST_SSH_USER') || '',
+    port: get('HOST_SSH_PORT') || '22',
+    keyPath: get('HOST_SSH_KEY_PATH') || '',
+    keyContent: get('HOST_SSH_KEY_CONTENT') || '',
+    passphrase: get('HOST_SSH_PASSPHRASE') || '',
+  };
+}
+
+function normalizeHost(h, index, defaults) {
   return {
     label: h.label || h.host || `Host ${index + 1}`,
     host: h.host || '',
-    port: parseInt(h.port || '22', 10),
-    username: h.username || '',
-    keyPath: h.keyPath || '',
-    keyContent: h.keyContent || '',
-    passphrase: h.passphrase || '',
+    port: parseInt(h.port || defaults.port || '22', 10),
+    username: h.username || defaults.username || '',
+    keyPath: h.keyPath || defaults.keyPath || '',
+    keyContent: h.keyContent || defaults.keyContent || '',
+    passphrase: h.passphrase || defaults.passphrase || '',
   };
 }
 
@@ -53,10 +68,11 @@ function normalizeHost(h, index) {
 function parseHosts() {
   const raw = get('RHUI_HOSTS_JSON');
   if (!raw) return [];
+  const defaults = hostDefaults();
   try {
     const arr = JSON.parse(raw);
     if (!Array.isArray(arr)) return [];
-    return arr.map(normalizeHost);
+    return arr.map((h, i) => normalizeHost(h, i, defaults));
   } catch (err) {
     return [];
   }

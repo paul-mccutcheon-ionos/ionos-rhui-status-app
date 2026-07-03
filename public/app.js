@@ -185,7 +185,7 @@ function parseEnvText(text) {
 }
 
 function envMapToPayload(map) {
-  const payload = { ionos: {}, hosts: [] };
+  const payload = { ionos: {}, hosts: [], hostDefaults: {} };
   if (map.IONOS_API_TOKEN !== undefined) payload.ionos.apiToken = map.IONOS_API_TOKEN;
   if (map.IONOS_CONTRACT_NUMBER !== undefined) payload.ionos.contractNumber = map.IONOS_CONTRACT_NUMBER;
   if (map.RHUI_HOSTS_JSON !== undefined) {
@@ -196,6 +196,14 @@ function envMapToPayload(map) {
       payload.hosts = [];
     }
   }
+  // Fallback SSH credentials applied server-side to any host above that
+  // doesn't specify its own -- lets a hand-written .env list hosts with just
+  // host/label and one shared key, instead of embedding it in every entry.
+  if (map.HOST_SSH_USER !== undefined) payload.hostDefaults.username = map.HOST_SSH_USER;
+  if (map.HOST_SSH_PORT !== undefined) payload.hostDefaults.port = map.HOST_SSH_PORT;
+  if (map.HOST_SSH_KEY_PATH !== undefined) payload.hostDefaults.keyPath = map.HOST_SSH_KEY_PATH;
+  if (map.HOST_SSH_KEY_CONTENT !== undefined) payload.hostDefaults.keyContent = map.HOST_SSH_KEY_CONTENT;
+  if (map.HOST_SSH_PASSPHRASE !== undefined) payload.hostDefaults.passphrase = map.HOST_SSH_PASSPHRASE;
   if (map.RHUI_REPO_FILTER !== undefined) payload.repoFilter = map.RHUI_REPO_FILTER;
   if (map.RHUI_MONITORED_REPOS !== undefined) payload.monitoredRepos = map.RHUI_MONITORED_REPOS;
   return payload;

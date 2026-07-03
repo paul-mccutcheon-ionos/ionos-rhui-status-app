@@ -63,6 +63,18 @@ router.post('/config', (req, res) => {
     overrides.RHUI_HOSTS_JSON = JSON.stringify(body.hosts);
   }
 
+  // Fallback SSH credentials for any host in RHUI_HOSTS_JSON missing its own
+  // (see src/config.js hostDefaults) -- set when uploading a .env that relies
+  // on a single shared key rather than embedding it per host in the JSON.
+  if (body.hostDefaults) {
+    const d = body.hostDefaults;
+    if (d.username !== undefined) overrides.HOST_SSH_USER = d.username;
+    if (d.port !== undefined) overrides.HOST_SSH_PORT = String(d.port);
+    if (d.keyPath !== undefined) overrides.HOST_SSH_KEY_PATH = d.keyPath;
+    if (d.keyContent !== undefined) overrides.HOST_SSH_KEY_CONTENT = d.keyContent;
+    if (d.passphrase !== undefined) overrides.HOST_SSH_PASSPHRASE = d.passphrase;
+  }
+
   if (body.repoFilter !== undefined) overrides.RHUI_REPO_FILTER = body.repoFilter;
   if (body.monitoredRepos !== undefined) overrides.RHUI_MONITORED_REPOS = body.monitoredRepos;
 
