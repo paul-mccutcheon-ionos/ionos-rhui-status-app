@@ -57,6 +57,17 @@ function renderPerHostKeyFields(values = {}) {
   </div>`;
 }
 
+function isPrivateIp(ip) {
+  return /^10\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\./.test(ip || '');
+}
+
+// Prefer a public-looking address as the default so SSH is more likely to
+// work out of the box; the field is always editable regardless.
+function pickDefaultIp(ips) {
+  if (!ips || !ips.length) return '';
+  return ips.find((ip) => !isPrivateIp(ip)) || ips[0];
+}
+
 function renderDiscoverResults() {
   if (!discoveredServers.length) {
     els.discoverResults.innerHTML = '';
@@ -64,14 +75,17 @@ function renderDiscoverResults() {
   }
   els.discoverResults.innerHTML = discoveredServers
     .map((server, index) => {
-      const ip = (server.ips && server.ips[0]) || '';
+      const ip = pickDefaultIp(server.ips);
+      const allIps = (server.ips || []).join(', ') || 'none found';
       return `<div class="discover-row" data-discover-index="${index}">
         <input type="checkbox" class="discover-checkbox" />
         <div class="discover-row-main">
           <div class="name">${escapeHtml(server.name)} <span class="muted">(${escapeHtml(server.datacenterName)})</span></div>
-          <div class="muted">Image: ${escapeHtml(server.image)}</div>
+          <div class="muted">Image: ${escapeHtml(server.image)} · IONOS-reported IPs: ${escapeHtml(allIps)}</div>
           <label>Label <input data-field="label" value="${escapeHtml(server.name)}" /></label>
-          <label>Host / IP <input data-field="host" value="${escapeHtml(ip)}" placeholder="10.0.0.10" /></label>
+          <label>SSH connect address — override if this IP is private/NAT'd and unreachable from this app; enter a public IP, NAT gateway address, or FQDN instead
+            <input data-field="host" value="${escapeHtml(ip)}" placeholder="10.0.0.10 or nat-gateway.example.com" />
+          </label>
           ${renderPerHostKeyFields()}
         </div>
       </div>`;
@@ -89,7 +103,9 @@ function renderHostsList() {
       (host, index) => `<div class="host-row" data-host-index="${index}">
         <div class="host-row-main">
           <label>Label <input data-field="label" value="${escapeHtml(host.label)}" placeholder="Test client" /></label>
-          <label>Host / IP <input data-field="host" value="${escapeHtml(host.host)}" placeholder="10.0.0.10" /></label>
+          <label>SSH connect address — public IP, NAT gateway address, or FQDN if the host is behind NAT/private networking
+            <input data-field="host" value="${escapeHtml(host.host)}" placeholder="10.0.0.10 or nat-gateway.example.com" />
+          </label>
           ${renderPerHostKeyFields(host)}
         </div>
         <button type="button" class="host-row-remove" data-remove-index="${index}">Remove</button>
