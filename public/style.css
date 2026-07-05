@@ -99,12 +99,22 @@ pre.output-block {
 .file-btn { position: relative; overflow: hidden; }
 
 .btn {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
+  vertical-align: middle;
   background: white;
   color: var(--ionos-blue);
   border: none;
   border-radius: 6px;
   padding: 8px 14px;
+  font-family: inherit;
+  font-size: 14px;
   font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
   cursor: pointer;
 }
 
