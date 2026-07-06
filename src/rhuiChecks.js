@@ -66,6 +66,32 @@ async function getOsRelease(conn, timeoutMs) {
   return stdout.trim() || 'unknown';
 }
 
+// The RHUI client is just an RPM (e.g. rh-ionos-rhui-client) that drops the
+// .repo files and entitlement certs onto the VM -- there's no daemon or API,
+// so its "version" is whatever RPM is installed.
+async function getRhuiClientVersion(conn, timeoutMs) {
+  const cmd = "rpm -qa --qf '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}\\n' 2>/dev/null | grep -i rhui-client";
+  const { stdout } = await ssh.exec(conn, cmd, timeoutMs);
+  const line = stdout.trim().split('\n').filter(Boolean)[0];
+  return line || null;
+}
+
+// IONOS RHUI has no public API or CLI for customers to query the backend
+// (Pulp) version -- this is a best-effort peek at the HTTP `Server` header
+// from the mirrorlist endpoint, which is NOT a formal RHUI version and may
+// be absent or generic (e.g. a proxy/LB name) depending on how it's fronted.
+async function getRhuiServerBanner(conn, url, certArgs, timeoutMs) {
+  if (!url) return null;
+  const cmd = `curl -s -o /dev/null -D - --connect-timeout 10 -m 20 ${certArgs.join(' ')} "${url}" 2>&1`;
+  try {
+    const { stdout } = await ssh.exec(conn, cmd, timeoutMs);
+    const serverLine = stdout.split('\n').find((l) => /^server:/i.test(l.trim()));
+    return serverLine ? serverLine.trim() : null;
+  } catch (err) {
+    return null;
+  }
+}
+
 // Reads every *.repo file on the client and returns the repo sections whose
 // id or URL mentions the RHUI filter string. IONOS RHUI repos are defined
 // with `mirrorlist=`, not `baseurl=` -- yum/dnf resolves the mirrorlist to an
@@ -469,12 +495,18 @@ async function checkHost(hostCfg, cfg) {
   try {
     conn = await ssh.connect(hostCfg, cfg.sshTimeoutMs);
     const osRelease = await getOsRelease(conn, cfg.sshTimeoutMs);
+    const rhuiClientVersion = await getRhuiClientVersion(conn, cfg.sshTimeoutMs);
     const dnfVars = await getDnfVars(conn, cfg.sshTimeoutMs);
     const discovered = (await discoverRhuiRepos(conn, cfg.repoFilter, cfg.sshTimeoutMs)).map((repo) => ({
       ...repo,
       baseurl: substituteDnfVars(repo.baseurl, dnfVars),
       mirrorlist: substituteDnfVars(repo.mirrorlist, dnfVars),
     }));
+
+    const bannerRepo = discovered.find((r) => r.mirrorlist) || discovered[0];
+    const rhuiServerBanner = bannerRepo
+      ? await getRhuiServerBanner(conn, bannerRepo.mirrorlist || bannerRepo.baseurl, buildCertArgs(bannerRepo), cfg.sshTimeoutMs)
+      : null;
 
     // Checks below run sequentially (not Promise.all) because they all share
     // one SSH connection, and sshd's default MaxSessions caps how many
@@ -557,6 +589,8 @@ async function checkHost(hostCfg, cfg) {
       configured: true,
       connectivity,
       osRelease,
+      rhuiClientVersion,
+      rhuiServerBanner,
       serverSide: { servers: serverChecks },
       clientSide: {
         repos,

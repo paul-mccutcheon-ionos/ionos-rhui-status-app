@@ -442,15 +442,33 @@ function renderServerView(host) {
   `;
 }
 
+function renderVersionInfo(host) {
+  const clientVersion = host.rhuiClientVersion;
+  const serverBanner = host.rhuiServerBanner;
+  return `
+    <div class="section-title">RHUI client / server version</div>
+    <div class="repo-block">
+      <p>${badge('Client', clientVersion ? 'ok' : 'muted')} ${clientVersion ? `<code>${escapeHtml(clientVersion)}</code>` : 'RHUI client RPM (e.g. rh-ionos-rhui-client) not found on this host'}</p>
+      <p>${badge('Server', serverBanner ? 'muted' : 'muted')} ${serverBanner ? `<code>${escapeHtml(serverBanner)}</code>` : 'Not available'}</p>
+      <p class="check-explainer">IONOS RHUI has no public API or CLI for customers to query the backend version, so there is no reliable way to detect a client/server version mismatch. The "Server" line above, when present, is just the HTTP response header from the mirrorlist endpoint (often a proxy/CDN identifier, not a formal RHUI version) -- shown for reference only.</p>
+    </div>
+  `;
+}
+
 function renderClientView(host) {
   const repos = host.clientSide && host.clientSide.repos;
   if (!repos || !repos.length) {
-    return '<p class="muted">No RHUI repos were found in /etc/yum.repos.d matching the configured filter. Check the "Repo filter" setting or verify this client is actually registered with RHUI.</p>';
+    return `
+      ${renderVersionInfo(host)}
+      <p class="muted">No RHUI repos were found in /etc/yum.repos.d matching the configured filter. Check the "Repo filter" setting or verify this client is actually registered with RHUI.</p>
+    `;
   }
 
   const repoRows = repos.map(renderRepoRow).join('');
 
   return `
+    ${renderVersionInfo(host)}
+
     <div class="section-title">Configuration issues found on this client</div>
     ${renderIssues(host.clientSide.issues)}
 
