@@ -231,6 +231,13 @@ async function checkClientCertificate(conn, hostCfg, certPath, timeoutMs) {
   }
 }
 
+// The plain, copy-pasteable equivalent of the curl we actually run (which
+// uses -s/-w with a marker for parsing) -- for showing customers a command
+// they can run themselves, on the same client, to see the same result.
+function buildDisplayCurlCommand(url, certArgs) {
+  return ['curl', '-v', ...certArgs, `"${url}"`].join(' ');
+}
+
 async function curlFetch(conn, url, certArgs, timeoutMs) {
   const marker = '__HTTP_CODE__:';
   const cmd = `curl -s --connect-timeout 10 -m 20 ${certArgs.join(' ')} -w '\\n${marker}%{http_code}' "${url}" 2>&1`;
@@ -250,11 +257,13 @@ async function curlFetch(conn, url, certArgs, timeoutMs) {
 // A mirrorlist is itself a small HTTPS resource that returns one URL per
 // line; dnf resolves it at request time to pick an actual content mirror.
 async function resolveMirrorlist(conn, repo, timeoutMs) {
-  const result = await curlFetch(conn, repo.mirrorlist, buildCertArgs(repo), timeoutMs);
-  if (!result.success) return { error: `mirrorlist fetch failed: ${result.error}` };
+  const certArgs = buildCertArgs(repo);
+  const command = buildDisplayCurlCommand(repo.mirrorlist, certArgs);
+  const result = await curlFetch(conn, repo.mirrorlist, certArgs, timeoutMs);
+  if (!result.success) return { error: `mirrorlist fetch failed: ${result.error}`, command };
   const lines = result.body.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
-  if (!lines.length) return { error: 'mirrorlist returned no usable mirror URLs' };
-  return { mirrorUrl: lines[0], mirrorCount: lines.length };
+  if (!lines.length) return { error: 'mirrorlist returned no usable mirror URLs', command };
+  return { mirrorUrl: lines[0], mirrorCount: lines.length, command };
 }
 
 // Known IONOS RHUI backend bug: the mirrorlist endpoint occasionally rewrites
@@ -308,6 +317,8 @@ async function checkLiveMetadataFetch(conn, repo, timeoutMs) {
           segment: dupSegment,
           malformedUrl: baseUrl,
           suggestedBaseUrl: collapseDuplicatedSegment(baseUrl, dupSegment),
+          mirrorlistCommand: mirrorInfo.command,
+          malformedUrlCommand: buildDisplayCurlCommand(baseUrl, certArgs),
         },
       };
     }
@@ -423,7 +434,7 @@ function buildIssues(repos) {
 
   for (const repo of repos) {
     if (!repo.mirrorlistBug) continue;
-    const { segment, malformedUrl, suggestedBaseUrl } = repo.mirrorlistBug;
+    const { segment, malformedUrl, suggestedBaseUrl, mirrorlistCommand, malformedUrlCommand } = repo.mirrorlistBug;
     issues.push({
       code: 'mirrorlist_duplicate_path',
       severity: 'error',
@@ -432,6 +443,10 @@ function buildIssues(repos) {
       fixLabel: `Apply baseurl workaround for ${repo.id}`,
       fixCommand: `# in ${repo.file}: comment out mirrorlist=..., add:\nbaseurl=${suggestedBaseUrl}`,
       fixParams: { repoId: repo.id, repoFile: repo.file, suggestedBaseUrl },
+      reproCommands: [
+        { label: 'Resolve the mirrorlist (shows the malformed URL it returns)', command: mirrorlistCommand },
+        { label: 'Request the malformed URL directly (observe the 404)', command: malformedUrlCommand },
+      ],
     });
   }
 

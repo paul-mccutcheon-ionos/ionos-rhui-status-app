@@ -360,6 +360,17 @@ function renderIssues(issues) {
       (issue) => `<div class="repo-block">
         <p>${badge(issue.severity === 'warning' ? 'Issue' : 'Error', issue.severity === 'warning' ? 'warn' : 'bad')} ${issue.message}</p>
         ${
+          issue.reproCommands && issue.reproCommands.length
+            ? `<p class="muted">Reproduce this yourself on the client:</p>
+               ${issue.reproCommands
+                 .map(
+                   (rc) => `<p class="muted">${escapeHtml(rc.label)}</p>
+                     <pre class="output-block">${escapeHtml(rc.command)}</pre>`
+                 )
+                 .join('')}`
+            : ''
+        }
+        ${
           issue.fixId
             ? `<p class="muted">Fix command:</p>
                <pre class="output-block">${escapeHtml(issue.fixCommand)}</pre>
