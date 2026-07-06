@@ -90,13 +90,11 @@ pre.output-block {
 
 .topbar-actions { display: flex; align-items: center; gap: 10px; }
 
-.topbar-actions .btn, .topbar-actions .file-btn {
+.topbar-actions .btn {
   font-size: 13px;
   line-height: 1.2;
   white-space: nowrap;
 }
-
-.file-btn { position: relative; overflow: hidden; }
 
 .btn {
   display: inline-flex;

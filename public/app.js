@@ -13,6 +13,7 @@ const els = {
   setupForm: document.getElementById('setup-form'),
   setupStatus: document.getElementById('setup-status'),
   envUpload: document.getElementById('env-upload'),
+  uploadEnvBtn: document.getElementById('upload-env-btn'),
   versionPill: document.getElementById('version-pill'),
   ionosApiToken: document.getElementById('ionos-api-token'),
   ionosContractNumber: document.getElementById('ionos-contract-number'),
@@ -723,6 +724,8 @@ els.setupForm.addEventListener('submit', async (e) => {
     els.setupStatus.textContent = `Error: ${err.message}`;
   }
 });
+
+els.uploadEnvBtn.addEventListener('click', () => els.envUpload.click());
 
 els.envUpload.addEventListener('change', async (e) => {
   const file = e.target.files[0];
