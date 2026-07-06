@@ -105,7 +105,7 @@ router.post('/ionos/discover', async (req, res) => {
   }
 });
 
-router.post('/fix/:hostIndex/enable-repos', async (req, res) => {
+router.post('/fix/:hostIndex/:fixId', async (req, res) => {
   const cfg = config.getConfig();
   const hostIndex = parseInt(req.params.hostIndex, 10);
   const hostCfg = cfg.hosts[hostIndex];
@@ -113,13 +113,30 @@ router.post('/fix/:hostIndex/enable-repos', async (req, res) => {
     res.status(404).json({ ok: false, error: `Unknown host index: ${req.params.hostIndex}` });
     return;
   }
-  const repoIds = Array.isArray(req.body?.repoIds) ? req.body.repoIds : [];
-  if (!repoIds.length) {
-    res.status(400).json({ ok: false, error: 'repoIds is required' });
-    return;
-  }
+
+  const { fixId } = req.params;
+  const body = req.body || {};
+
   try {
-    const result = await rhuiChecks.enableRepos(hostCfg, repoIds, cfg.sshTimeoutMs);
+    let result;
+    if (fixId === 'enable-repos') {
+      const repoIds = Array.isArray(body.repoIds) ? body.repoIds : [];
+      if (!repoIds.length) {
+        res.status(400).json({ ok: false, error: 'repoIds is required' });
+        return;
+      }
+      result = await rhuiChecks.enableRepos(hostCfg, repoIds, cfg.sshTimeoutMs);
+    } else if (fixId === 'apply-mirrorlist-workaround') {
+      const { repoId, repoFile, suggestedBaseUrl } = body;
+      if (!repoId || !repoFile || !suggestedBaseUrl) {
+        res.status(400).json({ ok: false, error: 'repoId, repoFile, and suggestedBaseUrl are required' });
+        return;
+      }
+      result = await rhuiChecks.applyMirrorlistWorkaround(hostCfg, { id: repoId, file: repoFile }, suggestedBaseUrl, cfg.sshTimeoutMs);
+    } else {
+      res.status(400).json({ ok: false, error: `Unknown fixId: ${fixId}` });
+      return;
+    }
     cachedStatus = null;
     res.json({ ok: result.success, ...result });
   } catch (err) {

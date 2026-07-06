@@ -361,8 +361,9 @@ function renderIssues(issues) {
         <p>${badge(issue.severity === 'warning' ? 'Issue' : 'Error', issue.severity === 'warning' ? 'warn' : 'bad')} ${issue.message}</p>
         ${
           issue.fixId
-            ? `<p class="muted">Fix command: <code>${issue.fixCommand}</code></p>
-               <button class="btn fix-btn" data-fix-id="${issue.fixId}" data-repo-ids='${JSON.stringify(issue.repoIds)}'>${issue.fixLabel}</button>`
+            ? `<p class="muted">Fix command:</p>
+               <pre class="output-block">${escapeHtml(issue.fixCommand)}</pre>
+               <button class="btn fix-btn" data-fix-id="${issue.fixId}" data-fix-params='${escapeHtml(JSON.stringify(issue.fixParams || {}))}'>${issue.fixLabel}</button>`
             : ''
         }
       </div>`
@@ -621,14 +622,14 @@ els.viewClient.addEventListener('click', async (e) => {
   const btn = e.target.closest('.fix-btn');
   if (!btn) return;
   const fixId = btn.dataset.fixId;
-  const repoIds = JSON.parse(btn.dataset.repoIds || '[]');
+  const fixParams = JSON.parse(btn.dataset.fixParams || '{}');
   btn.disabled = true;
   btn.textContent = 'Applying fix…';
   try {
     const resp = await fetch(`/api/fix/${selectedHostIndex}/${fixId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repoIds }),
+      body: JSON.stringify(fixParams),
     });
     const result = await resp.json();
     if (!result.ok) throw new Error(result.error || result.output || 'Fix failed');

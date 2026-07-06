@@ -33,6 +33,10 @@ typically talks to one RHUI server for all its repos):
   Red Hat (risk of double-billing)
 - **Live update check** — runs `dnf check-update` (restricted to primary, non-debug/source repos to stay fast) and
   surfaces the real output, success/failure, and exit code
+- **Mirrorlist duplicate-path detection** — catches a known IONOS RHUI backend bug where the mirrorlist endpoint
+  resolves to a URL with a repeated path segment (e.g. `.../pulp/content/content/dist/...`), which 404s on every
+  fetch. Flagged as an issue with a one-click fix that applies the standard support workaround: switch that one repo
+  from `mirrorlist=` to a hardcoded `baseurl=` with the duplicate segment collapsed.
 
 Every check is labeled in the UI with a one-line explanation of what it means and why it matters.
 

@@ -1,6 +1,6 @@
 {
   "name": "ionos-rhui-status-app",
-  "version": "1.3.5",
+  "version": "1.4.0",
   "description": "Dashboard for monitoring the status of IONOS-hosted internal RHUI (Red Hat Update Infrastructure) servers.",
   "main": "server.js",
   "scripts": {
