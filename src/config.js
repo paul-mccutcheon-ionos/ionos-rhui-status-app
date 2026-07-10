@@ -72,6 +72,22 @@ function normalizeHost(h, index, defaults) {
   };
 }
 
+// The same server can easily end up in the submitted list twice -- e.g.
+// checked in the IONOS discovery results and also present as a manually
+// added host row -- since the setup form has no visibility into the other
+// section when building its payload. Dedupe by connect address (host:port,
+// case-insensitive) so it's never checked/monitored twice, keeping the
+// first occurrence's label/credentials.
+function dedupeHosts(hosts) {
+  const seen = new Set();
+  return hosts.filter((h) => {
+    const key = `${(h.host || '').toLowerCase()}:${h.port}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 // Hosts are stored as a single JSON array (RHUI_HOSTS_JSON) rather than
 // numbered env vars, since the list can grow to any size via IONOS Cloud API
 // discovery. JSON.stringify/.parse already escape/restore embedded newlines
@@ -83,7 +99,7 @@ function parseHosts() {
   try {
     const arr = JSON.parse(raw);
     if (!Array.isArray(arr)) return [];
-    return arr.map((h, i) => normalizeHost(h, i, defaults));
+    return dedupeHosts(arr.map((h, i) => normalizeHost(h, i, defaults)));
   } catch (err) {
     return [];
   }

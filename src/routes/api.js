@@ -126,13 +126,6 @@ router.post('/fix/:hostIndex/:fixId', async (req, res) => {
         return;
       }
       result = await rhuiChecks.enableRepos(hostCfg, repoIds, cfg.sshTimeoutMs);
-    } else if (fixId === 'apply-mirrorlist-workaround') {
-      const { repoId, repoFile, suggestedBaseUrl } = body;
-      if (!repoId || !repoFile || !suggestedBaseUrl) {
-        res.status(400).json({ ok: false, error: 'repoId, repoFile, and suggestedBaseUrl are required' });
-        return;
-      }
-      result = await rhuiChecks.applyMirrorlistWorkaround(hostCfg, { id: repoId, file: repoFile }, suggestedBaseUrl, cfg.sshTimeoutMs);
     } else {
       res.status(400).json({ ok: false, error: `Unknown fixId: ${fixId}` });
       return;

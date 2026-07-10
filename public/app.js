@@ -359,10 +359,13 @@ function renderRepoRow(repo) {
     ? badge('OK', 'ok')
     : badge(repo.liveFetch ? repo.liveFetch.error || 'Failed' : 'No data', 'bad');
   const lag = repo.freshness && repo.freshness.lagSeconds != null ? `${Math.round(repo.freshness.lagSeconds / 3600)}h` : '—';
+  const dupSegmentNote = repo.duplicatedPathSegment
+    ? `<br/><span class="muted">ℹ️ mirror URL contains a duplicated "/${escapeHtml(repo.duplicatedPathSegment)}/" segment — this is normal RHUI behavior, not an issue</span>`
+    : '';
   return `<tr>
     <td>${repo.id}</td>
     <td>${repo.enabled ? badge('enabled', 'ok') : badge('disabled', 'warn')}</td>
-    <td>${fetchCell}</td>
+    <td>${fetchCell}${dupSegmentNote}</td>
     <td>${lag}</td>
   </tr>`;
 }

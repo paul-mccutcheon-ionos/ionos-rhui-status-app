@@ -292,11 +292,11 @@ async function resolveMirrorlist(conn, repo, timeoutMs) {
   return { mirrorUrl: lines[0], mirrorCount: lines.length, command };
 }
 
-// Known IONOS RHUI backend bug: the mirrorlist endpoint occasionally rewrites
-// a mirror URL with a repeated path segment (observed as
-// ".../pulp/content/content/dist/..."), which 404s on every fetch until
-// IONOS fixes it server-side. Detects any adjacent duplicated path segment,
-// not just "content", since the same class of bug could recur elsewhere.
+// The mirrorlist endpoint routinely returns mirror URLs with an adjacent
+// duplicated path segment (observed as ".../pulp/content/content/dist/...").
+// This looked like a backend bug at first (and 404s were seen), but it's
+// actually normal for how IONOS RHUI forms these URLs -- surfaced to the
+// user as an informational note only, never as an issue to fix.
 function detectDuplicatedPathSegment(url) {
   let parsed;
   try {
@@ -313,10 +313,6 @@ function detectDuplicatedPathSegment(url) {
   return null;
 }
 
-function collapseDuplicatedSegment(url, segment) {
-  return url.replace(new RegExp(`/${segment}/${segment}/`), `/${segment}/`);
-}
-
 // Actually fetches repodata/repomd.xml through the same path (mirrorlist
 // resolution + client certificate, if configured) yum/dnf would use. Success
 // here means the client can genuinely pull metadata right now.
@@ -324,6 +320,7 @@ async function checkLiveMetadataFetch(conn, repo, timeoutMs) {
   const certArgs = buildCertArgs(repo);
   let baseUrl = repo.baseurl;
   let mirrorInfo = null;
+  let duplicatedPathSegment = null;
 
   if (!baseUrl && repo.mirrorlist) {
     mirrorInfo = await resolveMirrorlist(conn, repo, timeoutMs);
@@ -331,23 +328,7 @@ async function checkLiveMetadataFetch(conn, repo, timeoutMs) {
       return { url: repo.mirrorlist, success: false, error: mirrorInfo.error };
     }
     baseUrl = mirrorInfo.mirrorUrl;
-
-    const dupSegment = detectDuplicatedPathSegment(baseUrl);
-    if (dupSegment) {
-      return {
-        url: repo.mirrorlist,
-        mirrorlistUrl: repo.mirrorlist,
-        success: false,
-        error: `RHUI mirrorlist returned a malformed URL with a duplicated "/${dupSegment}/" path segment (known IONOS backend issue) -- this will 404 on every fetch until IONOS fixes it server-side`,
-        mirrorlistBug: {
-          segment: dupSegment,
-          malformedUrl: baseUrl,
-          suggestedBaseUrl: collapseDuplicatedSegment(baseUrl, dupSegment),
-          mirrorlistCommand: mirrorInfo.command,
-          malformedUrlCommand: buildDisplayCurlCommand(baseUrl, certArgs),
-        },
-      };
-    }
+    duplicatedPathSegment = detectDuplicatedPathSegment(baseUrl);
   }
 
   if (!baseUrl) {
@@ -358,7 +339,7 @@ async function checkLiveMetadataFetch(conn, repo, timeoutMs) {
   try {
     const result = await curlFetch(conn, url, certArgs, timeoutMs);
     if (!result.success) {
-      return { url, mirrorlistUrl: repo.mirrorlist, success: false, error: result.error };
+      return { url, mirrorlistUrl: repo.mirrorlist, success: false, error: result.error, duplicatedPathSegment };
     }
     return {
       url,
@@ -366,9 +347,10 @@ async function checkLiveMetadataFetch(conn, repo, timeoutMs) {
       mirrorCount: mirrorInfo && mirrorInfo.mirrorCount,
       success: true,
       localRevision: parseRepomdRevision(result.body),
+      duplicatedPathSegment,
     };
   } catch (err) {
-    return { url, success: false, error: err.message };
+    return { url, success: false, error: err.message, duplicatedPathSegment };
   }
 }
 
@@ -455,24 +437,6 @@ function buildIssues(repos) {
       fixLabel: `Enable ${disabled.length} disabled RHUI repo(s)`,
       fixCommand: `dnf config-manager --set-enabled ${disabled.map((r) => r.id).join(' ')}`,
       fixParams: { repoIds: disabled.map((r) => r.id) },
-    });
-  }
-
-  for (const repo of repos) {
-    if (!repo.mirrorlistBug) continue;
-    const { segment, malformedUrl, suggestedBaseUrl, mirrorlistCommand, malformedUrlCommand } = repo.mirrorlistBug;
-    issues.push({
-      code: 'mirrorlist_duplicate_path',
-      severity: 'error',
-      message: `The IONOS RHUI mirrorlist for "${repo.id}" is returning a malformed URL with a duplicated "/${segment}/" path segment (a known IONOS backend issue, not something wrong with this client). Every metadata fetch 404s until IONOS fixes it server-side. Malformed: ${malformedUrl}`,
-      fixId: 'apply-mirrorlist-workaround',
-      fixLabel: `Apply baseurl workaround for ${repo.id}`,
-      fixCommand: `# in ${repo.file}: comment out mirrorlist=..., add:\nbaseurl=${suggestedBaseUrl}`,
-      fixParams: { repoId: repo.id, repoFile: repo.file, suggestedBaseUrl },
-      reproCommands: [
-        { label: 'Resolve the mirrorlist (shows the malformed URL it returns)', command: mirrorlistCommand },
-        { label: 'Request the malformed URL directly (observe the 404)', command: malformedUrlCommand },
-      ],
     });
   }
 
@@ -565,7 +529,7 @@ async function checkHost(hostCfg, cfg) {
         clientCert: repo.sslclientcert ? clientCertResults[repo.sslclientcert] : null,
         liveFetch,
         freshness,
-        mirrorlistBug: liveFetch.mirrorlistBug || null,
+        duplicatedPathSegment: liveFetch.duplicatedPathSegment || null,
       });
     }
 
@@ -634,41 +598,5 @@ async function enableRepos(hostCfg, repoIds, timeoutMs) {
   }
 }
 
-function shellDoubleQuoteEscape(s) {
-  return String(s).replace(/(["$`\\])/g, '\\$1');
-}
 
-// Applies the same manual workaround IONOS support gives customers hitting
-// the mirrorlist duplicate-path bug: comment out mirrorlist= for this one
-// repo section and replace it with a hardcoded baseurl= (the malformed URL
-// with the duplicate segment collapsed). Requires root, or passwordless sudo.
-async function applyMirrorlistWorkaround(hostCfg, repo, suggestedBaseUrl, timeoutMs) {
-  if (!repo || !repo.id || !repo.file || !suggestedBaseUrl) {
-    throw new Error('repoId, repoFile, and suggestedBaseUrl are required');
-  }
-  const section = shellDoubleQuoteEscape(`[${repo.id}]`);
-  const baseUrl = shellDoubleQuoteEscape(suggestedBaseUrl);
-  const file = shellDoubleQuoteEscape(repo.file);
-  const awkProgram = [
-    '$0==sec{insec=1}',
-    '/^\\[/ && $0!=sec{insec=0}',
-    'insec && /^mirrorlist=/{print "#" $0; print "baseurl=" bu; next}',
-    '{print}',
-  ].join(' ');
-  const cmd = withSudo(
-    hostCfg,
-    `awk -v sec="${section}" -v bu="${baseUrl}" '${awkProgram}' "${file}" > "${file}.rhuicheck.tmp" && mv "${file}.rhuicheck.tmp" "${file}"; echo __EXIT__:$?`
-  );
-  const conn = await ssh.connect(hostCfg, timeoutMs);
-  try {
-    const { stdout } = await ssh.exec(conn, cmd, timeoutMs);
-    const m = stdout.match(/__EXIT__:(\d+)/);
-    const exitCode = m ? parseInt(m[1], 10) : null;
-    const output = stdout.replace(/__EXIT__:\d+\s*$/, '').trim();
-    return { success: exitCode === 0, exitCode, output };
-  } finally {
-    conn.end();
-  }
-}
-
-module.exports = { checkAll, checkHost, enableRepos, applyMirrorlistWorkaround };
+module.exports = { checkAll, checkHost, enableRepos };
