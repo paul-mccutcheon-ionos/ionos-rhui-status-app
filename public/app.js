@@ -67,12 +67,43 @@ function isPrivateIp(ip) {
 
 // Prefer a confirmed-SSH-reachable, public-looking address as the default so
 // SSH is more likely to work out of the box; the field is always editable.
-function pickDefaultIp(ipStatus) {
+// If nothing is directly reachable but an NLB/ALB forwards to this host, its
+// public endpoint is a far better default than an unroutable private IP.
+function pickDefaultIp(server) {
+  const ipStatus = server.ipStatus;
   if (!ipStatus || !ipStatus.length) return '';
   const reachable = ipStatus.filter((s) => s.sshReachable);
+  if (!reachable.length && server.suggestedConnectAddress) return server.suggestedConnectAddress;
   const pool = reachable.length ? reachable : ipStatus;
   const pick = pool.find((s) => !isPrivateIp(s.address)) || pool[0];
   return pick.address;
+}
+
+function renderConnectivityNotes(server) {
+  if (!server.hasPrivateIp) return '';
+  const lines = [];
+
+  if (server.natGateway) {
+    lines.push(
+      `Outbound via NAT gateway: ${escapeHtml(server.natGateway.name)} (${escapeHtml(server.natGateway.publicIps.join(', '))}) ✅`
+    );
+  } else {
+    lines.push(
+      '⚠️ No NAT gateway found on this host\'s network — outbound internet access (required to reach the RHUI server) may not be possible.'
+    );
+  }
+
+  if (server.sshEntryPoints && server.sshEntryPoints.length) {
+    for (const entry of server.sshEntryPoints) {
+      lines.push(
+        `Inbound SSH via ${entry.type} "${escapeHtml(entry.name)}": ${escapeHtml(entry.externalIps.join('/'))}:${entry.externalPort} → ${escapeHtml(entry.targetIp)}:${entry.targetPort}`
+      );
+    }
+  } else if (!server.ipStatus.some((s) => s.sshReachable)) {
+    lines.push('⚠️ No NLB/ALB forwarding rule found exposing this host\'s SSH port.');
+  }
+
+  return `<div class="muted">${lines.join('<br/>')}</div>`;
 }
 
 function renderIpStatusList(ipStatus) {
@@ -89,12 +120,13 @@ function renderDiscoverResults() {
   }
   els.discoverResults.innerHTML = discoveredServers
     .map((server, index) => {
-      const ip = pickDefaultIp(server.ipStatus);
+      const ip = pickDefaultIp(server);
       return `<div class="discover-row" data-discover-index="${index}">
         <input type="checkbox" class="discover-checkbox" />
         <div class="discover-row-main">
           <div class="name">${escapeHtml(server.name)} <span class="muted">(${escapeHtml(server.datacenterName)})</span></div>
           <div class="muted">Image: ${escapeHtml(server.image)} · SSH port 22 reachability: ${renderIpStatusList(server.ipStatus)}</div>
+          ${renderConnectivityNotes(server)}
           <label>Label <input data-field="label" value="${escapeHtml(server.name)}" /></label>
           <label>SSH connect address — override if this IP is private/NAT'd and unreachable from this app; enter a public IP, NAT gateway address, or FQDN instead (a ":port" suffix is fine here too, e.g. an NLB endpoint)
             <input data-field="host" value="${escapeHtml(ip)}" placeholder="10.0.0.10 or nat-gateway.example.com:2222" />
